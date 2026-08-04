@@ -98,10 +98,23 @@ class ManagedMcpToolClient:
             allow_empty=True,
         )
         logger.info("mcp_client_initialized")
+        tools_response, _ = self._post_json_rpc(
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+            api_key=api_key,
+            session_id=session_id,
+            protocol_version=negotiated_version,
+        )
+        properties, required = _tool_contract(_json_rpc_result(tools_response), name)
+        logger.info(
+            "mcp_tool_contract_%s_properties_%s_required_%s",
+            name,
+            ",".join(properties),
+            ",".join(required),
+        )
         response, _ = self._post_json_rpc(
             {
                 "jsonrpc": "2.0",
-                "id": 2,
+                "id": 3,
                 "method": "tools/call",
                 "params": {"name": name, "arguments": arguments},
             },
@@ -211,6 +224,32 @@ def _mcp_result_value(result: Any) -> Any:
         return json.loads(combined)
     except json.JSONDecodeError:
         return combined
+
+
+def _tool_contract(result: Mapping[str, Any], name: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    tools = result.get("tools")
+    if not isinstance(tools, list):
+        raise AdapterContractError("Managed MCP returned an invalid tool catalog.")
+    for tool in tools:
+        if not isinstance(tool, Mapping) or tool.get("name") != name:
+            continue
+        schema = tool.get("inputSchema")
+        if not isinstance(schema, Mapping):
+            raise AdapterContractError("Managed MCP returned an invalid tool schema.")
+        raw_properties = schema.get("properties", {})
+        raw_required = schema.get("required", [])
+        if not isinstance(raw_properties, Mapping) or not isinstance(raw_required, list):
+            raise AdapterContractError("Managed MCP returned an invalid tool schema.")
+        properties = tuple(
+            sorted(
+                f"{key}:{value.get('type', 'unknown')}"
+                for key, value in raw_properties.items()
+                if isinstance(key, str) and isinstance(value, Mapping)
+            )
+        )
+        required = tuple(sorted(item for item in raw_required if isinstance(item, str)))
+        return properties, required
+    raise AdapterContractError("The required Managed MCP tool is unavailable.")
 
 
 class ManagedMcpIncidentRepository:

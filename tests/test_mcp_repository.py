@@ -14,6 +14,7 @@ from incident_memory.adapters.mcp import (
     _decode_mcp_response,
     _extract_rows,
     _mcp_result_value,
+    _tool_contract,
 )
 from incident_memory.errors import AdapterContractError, ExternalServiceError
 from incident_memory.models import EMBEDDING_DIMENSIONS
@@ -205,7 +206,15 @@ class FakeOpener:
             FakeHttpResponse(b"", content_type="application/json"),
             FakeHttpResponse(
                 (
-                    b'data: {"jsonrpc":"2.0","id":2,"result":{"content":[],'
+                    b'{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":'
+                    b'"select_query","inputSchema":{"type":"object","properties":'
+                    b'{"query":{"type":"string"}},"required":["query"]}}]}}'
+                ),
+                content_type="application/json",
+            ),
+            FakeHttpResponse(
+                (
+                    b'data: {"jsonrpc":"2.0","id":3,"result":{"content":[],'
                     b'"structuredContent":{"rows":[]}}}\n\n'
                 ),
                 content_type="text/event-stream",
@@ -229,9 +238,53 @@ def test_tool_client_performs_mcp_handshake_and_decodes_sse() -> None:
     result = client.call_tool("select_query", {"query": "fixed"})
 
     assert result == {"rows": []}
-    assert len(opener.requests) == 3
+    assert len(opener.requests) == 4
     assert opener.requests[1][0].get_header("Mcp-session-id") == "test-session"
-    assert opener.requests[2][0].get_header("Mcp-protocol-version") == "2025-06-18"
+    assert opener.requests[3][0].get_header("Mcp-protocol-version") == "2025-06-18"
+
+
+def test_tool_contract_returns_static_property_types_and_required_fields() -> None:
+    properties, required = _tool_contract(
+        {
+            "tools": [
+                {
+                    "name": "insert_rows",
+                    "inputSchema": {
+                        "properties": {"rows": {"type": "array"}, "table": {"type": "string"}},
+                        "required": ["table", "rows"],
+                    },
+                }
+            ]
+        },
+        "insert_rows",
+    )
+
+    assert properties == ("rows:array", "table:string")
+    assert required == ("rows", "table")
+
+
+@pytest.mark.parametrize(
+    ("catalog", "message"),
+    [
+        ({}, "invalid tool catalog"),
+        ({"tools": [{"name": "another_tool"}]}, "unavailable"),
+        ({"tools": [{"name": "insert_rows", "inputSchema": "invalid"}]}, "invalid tool schema"),
+        (
+            {
+                "tools": [
+                    {
+                        "name": "insert_rows",
+                        "inputSchema": {"properties": [], "required": "invalid"},
+                    }
+                ]
+            },
+            "invalid tool schema",
+        ),
+    ],
+)
+def test_tool_contract_rejects_invalid_catalogs(catalog, message) -> None:
+    with pytest.raises(AdapterContractError, match=message):
+        _tool_contract(catalog, "insert_rows")
 
 
 def test_decode_mcp_response_rejects_invalid_payload() -> None:
