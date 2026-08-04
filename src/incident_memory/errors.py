@@ -54,3 +54,15 @@ class AdapterContractError(ApplicationError):
             code="adapter_contract_error",
             status_code=502,
         )
+
+
+class ExternalServiceError(ApplicationError):
+    """Raised when an approved external adapter fails safely."""
+
+    def __init__(self, dependency: str) -> None:
+        super().__init__(
+            f"The {dependency} service could not complete the request.",
+            code="external_service_error",
+            status_code=502,
+            details={"dependency": dependency},
+        )

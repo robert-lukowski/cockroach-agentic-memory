@@ -41,3 +41,31 @@ def test_unavailable_repository_fails_closed(stored_incident) -> None:
             service=None,
             environment=None,
         )
+
+
+def test_live_configuration_enables_live_adapters_without_exposing_values() -> None:
+    settings = Settings.from_environment(
+        {
+            "APP_MODE": "live",
+            "EMBEDDING_DIMENSIONS": "1024",
+            "BEDROCK_EMBEDDING_MODEL_ID": "embedding-model",
+            "BEDROCK_GENERATION_MODEL_ID": "generation-model",
+            "MCP_SECRET_ARN": "arn:aws:secretsmanager:eu-central-1:123456789012:secret:mcp",
+            "COCKROACH_CLUSTER_ID": "11111111-1111-4111-8111-111111111111",
+            "REPOSITORY_BACKEND": "managed-mcp",
+        }
+    )
+
+    health = settings.health_payload()
+
+    assert settings.live_adapters_enabled is True
+    assert health["configuration"]["live_adapters_enabled"] is True
+    assert "11111111" not in str(health)
+    assert "arn:aws:secretsmanager" not in str(health)
+
+
+def test_live_configuration_reports_missing_required_values() -> None:
+    settings = Settings.from_environment({"APP_MODE": "live"})
+
+    assert settings.live_adapters_enabled is False
+    assert len(settings.issues) == 4

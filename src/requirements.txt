@@ -1,2 +1,1 @@
-# The approved scaffold uses only the Python standard library.
-# Add and pin AWS/MCP client dependencies with the approved live adapters.
+boto3==1.43.63

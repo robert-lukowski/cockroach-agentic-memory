@@ -18,7 +18,22 @@ Parameters:
     Default: amazon.titan-embed-text-v2:0
   GenerationModelId:
     Type: String
-    Default: ""
+    Default: openai.gpt-oss-20b-1:0
+  McpSecretArn:
+    Type: String
+    Description: ARN of the existing secret containing only the Managed MCP API key
+    MinLength: 20
+  CockroachClusterId:
+    Type: String
+    Description: CockroachDB Cloud cluster UUID used by the Managed MCP header
+    AllowedPattern: "[0-9a-fA-F-]{36}"
+  CockroachDatabase:
+    Type: String
+    Default: defaultdb
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9_-]*"
+  McpUrl:
+    Type: String
+    Default: https://cockroachlabs.cloud/mcp
 
 Globals:
   Function:
@@ -26,15 +41,19 @@ Globals:
     Architectures:
       - x86_64
     MemorySize: 512
-    Timeout: 30
+    Timeout: 28
     Environment:
       Variables:
-        APP_MODE: scaffold
+        APP_MODE: live
         SERVICE_NAME: !Ref ApplicationName
-        REPOSITORY_BACKEND: unconfigured
+        REPOSITORY_BACKEND: managed-mcp
         EMBEDDING_DIMENSIONS: "1024"
         BEDROCK_EMBEDDING_MODEL_ID: !Ref EmbeddingModelId
         BEDROCK_GENERATION_MODEL_ID: !Ref GenerationModelId
+        MCP_URL: !Ref McpUrl
+        MCP_SECRET_ARN: !Ref McpSecretArn
+        COCKROACH_CLUSTER_ID: !Ref CockroachClusterId
+        COCKROACH_DATABASE: !Ref CockroachDatabase
 
 Resources:
   IncidentMemoryApi:
@@ -69,6 +88,24 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ApplicationName}-${EnvironmentName}:*"
+        - PolicyName: invoke-approved-bedrock-models
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${EmbeddingModelId}"
+                  - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${GenerationModelId}"
+        - PolicyName: read-managed-mcp-credential
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref McpSecretArn
 
   IncidentMemoryFunction:
     Type: AWS::Serverless::Function
@@ -109,3 +146,6 @@ Outputs:
   ApiUrl:
     Description: IAM-authenticated REST API base URL
     Value: !Sub "https://${IncidentMemoryApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/v1"
+  FunctionName:
+    Description: Lambda function name
+    Value: !Ref IncidentMemoryFunction

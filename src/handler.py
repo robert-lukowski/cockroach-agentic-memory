@@ -9,10 +9,7 @@ import logging
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from incident_memory.adapters.unavailable import (
-    UnavailableBedrockGateway,
-    UnavailableIncidentRepository,
-)
+from incident_memory.bootstrap import build_service
 from incident_memory.config import Settings
 from incident_memory.errors import ApplicationError, ValidationError
 from incident_memory.models import IncidentCreateRequest, InvestigationRequest
@@ -128,8 +125,5 @@ def create_lambda_handler(
 
 
 _settings = Settings.from_environment()
-_service = IncidentMemoryService(
-    bedrock=UnavailableBedrockGateway(),
-    repository=UnavailableIncidentRepository(),
-)
+_service = build_service(_settings)
 lambda_handler = create_lambda_handler(service=_service, settings=_settings)
