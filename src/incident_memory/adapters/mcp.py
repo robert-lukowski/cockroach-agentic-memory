@@ -66,6 +66,7 @@ class ManagedMcpToolClient:
 
     def _call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         api_key = self._api_key_provider.get_api_key()
+        logger.info("mcp_credential_loaded")
         initialized, session_id = self._post_json_rpc(
             {
                 "jsonrpc": "2.0",
@@ -83,6 +84,7 @@ class ManagedMcpToolClient:
             api_key=api_key,
             session_id=None,
         )
+        logger.info("mcp_session_initialized")
         negotiated_version = str(
             _json_rpc_result(initialized).get("protocolVersion", _MCP_PROTOCOL_VERSION)
         )
@@ -93,6 +95,7 @@ class ManagedMcpToolClient:
             protocol_version=negotiated_version,
             allow_empty=True,
         )
+        logger.info("mcp_client_initialized")
         response, _ = self._post_json_rpc(
             {
                 "jsonrpc": "2.0",
