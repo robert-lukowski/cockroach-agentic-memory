@@ -148,7 +148,7 @@ class ManagedMcpToolClient:
                 returned_session_id = response.headers.get("Mcp-Session-Id") or session_id
                 content_type = response.headers.get("Content-Type", "")
         except HTTPError as error:
-            logger.warning("mcp_http_error", extra={"http_status": error.code})
+            logger.warning("mcp_http_error_%s", error.code)
             raise ExternalServiceError("CockroachDB Managed MCP") from error
         except URLError as error:
             logger.warning("mcp_network_error")
