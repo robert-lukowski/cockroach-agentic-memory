@@ -260,23 +260,24 @@ class ManagedMcpIncidentRepository:
         self._database = database
 
     def save(self, incident: StoredIncident) -> None:
-        row = {
-            "id": str(incident.incident_id),
-            "scope": incident.scope,
-            "service": incident.service,
-            "environment": incident.environment,
-            "title": incident.title,
-            "symptoms": incident.symptoms,
-            "root_cause": incident.root_cause,
-            "resolution": incident.resolution,
-            "tags": list(incident.tags),
-            "metadata": incident.metadata,
-            "embedding": _vector_literal(incident.embedding),
-            "created_at": incident.created_at.isoformat(),
-        }
+        tags = json.dumps(list(incident.tags), ensure_ascii=False, separators=(",", ":"))
+        metadata = json.dumps(incident.metadata, ensure_ascii=False, separators=(",", ":"))
+        vector = _vector_literal(incident.embedding)
+        query = (
+            f"INSERT INTO {_TABLE_NAME} "
+            "(id, scope, service, environment, title, symptoms, root_cause, resolution, "
+            "tags, metadata, embedding, created_at) VALUES ("
+            f"{_sql_literal(str(incident.incident_id))}::UUID, "
+            f"{_sql_literal(incident.scope)}, {_sql_literal(incident.service)}, "
+            f"{_sql_literal(incident.environment)}, {_sql_literal(incident.title)}, "
+            f"{_sql_literal(incident.symptoms)}, {_sql_literal(incident.root_cause)}, "
+            f"{_sql_literal(incident.resolution)}, {_sql_literal(tags)}::JSONB, "
+            f"{_sql_literal(metadata)}::JSONB, {_sql_literal(vector)}::VECTOR, "
+            f"{_sql_literal(incident.created_at.isoformat())}::TIMESTAMPTZ)"
+        )
         self._tool_caller.call_tool(
             "insert_rows",
-            {"database": self._database, "table": _TABLE_NAME, "rows": [row]},
+            {"database": self._database, "query": query},
         )
 
     def find_similar(

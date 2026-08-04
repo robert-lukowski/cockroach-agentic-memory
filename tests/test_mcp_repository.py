@@ -39,9 +39,11 @@ def test_save_maps_incident_to_insert_rows(stored_incident) -> None:
     name, arguments = caller.calls[0]
     assert name == "insert_rows"
     assert arguments["database"] == "defaultdb"
-    assert arguments["table"] == "incident_memories"
-    assert arguments["rows"][0]["id"] == str(stored_incident.incident_id)
-    assert arguments["rows"][0]["embedding"].startswith("[0.25,")
+    assert arguments.keys() == {"database", "query"}
+    assert "INSERT INTO incident_memories" in arguments["query"]
+    assert str(stored_incident.incident_id) in arguments["query"]
+    assert "'[0.25,0.25," in arguments["query"]
+    assert "::VECTOR" in arguments["query"]
 
 
 def test_find_similar_builds_fixed_query_and_maps_rows(stored_incident) -> None:
