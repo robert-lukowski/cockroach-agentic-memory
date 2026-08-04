@@ -1,0 +1,24 @@
+[project]
+name = "agentic-incident-memory"
+version = "0.1.0"
+description = "Deterministic incident-memory RAG API scaffold"
+requires-python = ">=3.13,<3.14"
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --cov=src --cov-report=term-missing"
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]

@@ -3,6 +3,14 @@
 .aws-sam/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+build/
+dist/
+*.egg-info/
 .venv/
 venv/
 credentials

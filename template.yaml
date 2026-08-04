@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Agentic Incident Memory deterministic RAG API scaffold
+
+Parameters:
+  ApplicationName:
+    Type: String
+    Default: agentic-incident-memory
+    AllowedPattern: "[a-z][a-z0-9-]+"
+    MaxLength: 40
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedPattern: "[a-z][a-z0-9-]+"
+    MaxLength: 16
+  EmbeddingModelId:
+    Type: String
+    Default: amazon.titan-embed-text-v2:0
+  GenerationModelId:
+    Type: String
+    Default: ""
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Architectures:
+      - x86_64
+    MemorySize: 512
+    Timeout: 30
+    Environment:
+      Variables:
+        APP_MODE: scaffold
+        SERVICE_NAME: !Ref ApplicationName
+        REPOSITORY_BACKEND: unconfigured
+        EMBEDDING_DIMENSIONS: "1024"
+        BEDROCK_EMBEDDING_MODEL_ID: !Ref EmbeddingModelId
+        BEDROCK_GENERATION_MODEL_ID: !Ref GenerationModelId
+
+Resources:
+  IncidentMemoryApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${ApplicationName}-${EnvironmentName}-api"
+      StageName: v1
+      EndpointConfiguration: REGIONAL
+      Auth:
+        DefaultAuthorizer: AWS_IAM
+
+  IncidentMemoryFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ApplicationName}-${EnvironmentName}-lambda"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: write-function-logs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ApplicationName}-${EnvironmentName}:*"
+
+  IncidentMemoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ApplicationName}-${EnvironmentName}"
+      CodeUri: src/
+      Handler: handler.lambda_handler
+      Role: !GetAtt IncidentMemoryFunctionRole.Arn
+      Events:
+        Health:
+          Type: Api
+          Properties:
+            RestApiId: !Ref IncidentMemoryApi
+            Path: /health
+            Method: GET
+        CreateIncident:
+          Type: Api
+          Properties:
+            RestApiId: !Ref IncidentMemoryApi
+            Path: /incidents
+            Method: POST
+        Investigate:
+          Type: Api
+          Properties:
+            RestApiId: !Ref IncidentMemoryApi
+            Path: /investigations
+            Method: POST
+    Metadata:
+      BuildMethod: python3.13
+
+  IncidentMemoryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ApplicationName}-${EnvironmentName}"
+      RetentionInDays: 14
+
+Outputs:
+  ApiUrl:
+    Description: IAM-authenticated REST API base URL
+    Value: !Sub "https://${IncidentMemoryApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/v1"

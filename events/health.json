@@ -1,0 +1,11 @@
+{
+  "resource": "/health",
+  "path": "/health",
+  "httpMethod": "GET",
+  "headers": {},
+  "requestContext": {
+    "requestId": "local-health-request"
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

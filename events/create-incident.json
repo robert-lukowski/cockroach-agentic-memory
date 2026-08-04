@@ -1,0 +1,13 @@
+{
+  "resource": "/incidents",
+  "path": "/incidents",
+  "httpMethod": "POST",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "requestContext": {
+    "requestId": "local-create-request"
+  },
+  "body": "{\"scope\":\"hackathon-demo\",\"service\":\"payments-api\",\"environment\":\"production\",\"title\":\"Checkout latency after connection exhaustion\",\"symptoms\":\"Checkout requests exceeded five seconds and database connection waits increased.\",\"root_cause\":\"A connection pool limit was lower than the Lambda concurrency.\",\"resolution\":\"Raised the pool limit, bounded function concurrency, and added saturation alerts.\",\"tags\":[\"latency\",\"database\"],\"metadata\":{\"severity\":\"SEV-2\"}}",
+  "isBase64Encoded": false
+}

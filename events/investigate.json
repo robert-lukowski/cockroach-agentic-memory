@@ -1,0 +1,13 @@
+{
+  "resource": "/investigations",
+  "path": "/investigations",
+  "httpMethod": "POST",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "requestContext": {
+    "requestId": "local-investigation-request"
+  },
+  "body": "{\"scope\":\"hackathon-demo\",\"service\":\"payments-api\",\"environment\":\"production\",\"symptoms\":\"Checkout latency is rising while database connection waits spike.\",\"top_k\":5}",
+  "isBase64Encoded": false
+}
