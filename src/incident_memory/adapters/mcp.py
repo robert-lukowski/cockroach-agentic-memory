@@ -7,6 +7,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any, Protocol
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import UUID
@@ -139,12 +140,19 @@ class ManagedMcpToolClient:
             headers=headers,
             method="POST",
         )
-        with self._opener.open(request, timeout=self._timeout_seconds) as response:
-            body = response.read(_MAX_RESPONSE_BYTES + 1)
-            if len(body) > _MAX_RESPONSE_BYTES:
-                raise AdapterContractError("Managed MCP returned an oversized response.")
-            returned_session_id = response.headers.get("Mcp-Session-Id") or session_id
-            content_type = response.headers.get("Content-Type", "")
+        try:
+            with self._opener.open(request, timeout=self._timeout_seconds) as response:
+                body = response.read(_MAX_RESPONSE_BYTES + 1)
+                if len(body) > _MAX_RESPONSE_BYTES:
+                    raise AdapterContractError("Managed MCP returned an oversized response.")
+                returned_session_id = response.headers.get("Mcp-Session-Id") or session_id
+                content_type = response.headers.get("Content-Type", "")
+        except HTTPError as error:
+            logger.warning("mcp_http_error", extra={"http_status": error.code})
+            raise ExternalServiceError("CockroachDB Managed MCP") from error
+        except URLError as error:
+            logger.warning("mcp_network_error")
+            raise ExternalServiceError("CockroachDB Managed MCP") from error
         if not body:
             if allow_empty:
                 return None, returned_session_id
