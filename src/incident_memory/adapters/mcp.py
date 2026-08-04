@@ -15,6 +15,7 @@ from incident_memory.errors import AdapterContractError, ExternalServiceError
 from incident_memory.models import IncidentEvidence, StoredIncident
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 _TABLE_NAME = "incident_memories"
 _MCP_PROTOCOL_VERSION = "2025-06-18"
