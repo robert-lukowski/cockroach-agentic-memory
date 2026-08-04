@@ -1,0 +1,10 @@
+.env
+.env.*
+.aws-sam/
+__pycache__/
+*.pyc
+.venv/
+venv/
+credentials
+*.pem
+.vscode/settings.json
