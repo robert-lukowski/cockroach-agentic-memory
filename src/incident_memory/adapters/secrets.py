@@ -48,3 +48,8 @@ class SecretsManagerApiKeyProvider:
                 raise AdapterContractError("The MCP credential secret is empty or invalid.")
             self._cached_value = secret_value.strip()
             return self._cached_value
+
+    def invalidate(self) -> None:
+        """Discard the cached value after an authentication rejection."""
+        with self._lock:
+            self._cached_value = None

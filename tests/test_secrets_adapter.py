@@ -36,6 +36,18 @@ def test_retrieves_and_caches_api_key() -> None:
     assert client.calls == 1
 
 
+def test_invalidation_reloads_rotated_api_key() -> None:
+    client = FakeSecretsClient({"SecretString": "first-test-api-key"})
+    api_key_provider = provider(client)
+    assert api_key_provider.get_api_key() == "first-test-api-key"
+    client.result = {"SecretString": "rotated-test-api-key"}
+
+    api_key_provider.invalidate()
+
+    assert api_key_provider.get_api_key() == "rotated-test-api-key"
+    assert client.calls == 2
+
+
 def test_rejects_empty_secret() -> None:
     with pytest.raises(AdapterContractError, match="empty"):
         provider(FakeSecretsClient({"SecretString": "  "})).get_api_key()

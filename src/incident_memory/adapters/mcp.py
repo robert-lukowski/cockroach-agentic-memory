@@ -149,6 +149,10 @@ class ManagedMcpToolClient:
                 content_type = response.headers.get("Content-Type", "")
         except HTTPError as error:
             logger.warning("mcp_http_error_%s", error.code)
+            if error.code in {401, 403}:
+                invalidate = getattr(self._api_key_provider, "invalidate", None)
+                if callable(invalidate):
+                    invalidate()
             raise ExternalServiceError("CockroachDB Managed MCP") from error
         except URLError as error:
             logger.warning("mcp_network_error")
