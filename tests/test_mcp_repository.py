@@ -14,6 +14,7 @@ from incident_memory.adapters.mcp import (
     _decode_mcp_response,
     _extract_rows,
     _mcp_result_value,
+    _mcp_tool_error_category,
     _tool_contract,
 )
 from incident_memory.errors import AdapterContractError, ExternalServiceError
@@ -287,6 +288,23 @@ def test_tool_contract_returns_static_property_types_and_required_fields() -> No
 def test_tool_contract_rejects_invalid_catalogs(catalog, message) -> None:
     with pytest.raises(AdapterContractError, match=message):
         _tool_contract(catalog, "insert_rows")
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_category", "expected_sqlstate"),
+    [
+        ("permission denied for cluster", "authorization", None),
+        ("invalid argument: database is required", "invalid_arguments", None),
+        ("statement not allowed by tool", "statement_rejected", None),
+        ("relation does not exist (SQLSTATE 42P01)", "not_found", "42P01"),
+        ("syntax error at token (42601)", "sql_syntax", "42601"),
+        ("opaque provider failure", "unknown", None),
+    ],
+)
+def test_mcp_tool_error_classification(message, expected_category, expected_sqlstate) -> None:
+    result = {"content": [{"type": "text", "text": message}], "isError": True}
+
+    assert _mcp_tool_error_category(result) == (expected_category, expected_sqlstate)
 
 
 def test_decode_mcp_response_rejects_invalid_payload() -> None:

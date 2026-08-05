@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any, Protocol
@@ -124,6 +125,8 @@ class ManagedMcpToolClient:
         )
         result = _json_rpc_result(response)
         if result.get("isError") is True:
+            category, sqlstate = _mcp_tool_error_category(result)
+            logger.warning("mcp_tool_error_%s_sqlstate_%s", category, sqlstate or "none")
             raise ExternalServiceError("CockroachDB Managed MCP")
         logger.info("mcp_tool_completed", extra={"tool_name": name})
         return _mcp_result_value(result)
@@ -250,6 +253,38 @@ def _tool_contract(result: Mapping[str, Any], name: str) -> tuple[tuple[str, ...
         required = tuple(sorted(item for item in raw_required if isinstance(item, str)))
         return properties, required
     raise AdapterContractError("The required Managed MCP tool is unavailable.")
+
+
+def _mcp_tool_error_category(result: Mapping[str, Any]) -> tuple[str, str | None]:
+    fragments = [
+        item.get("text", "")
+        for item in result.get("content", [])
+        if isinstance(item, Mapping) and item.get("type") == "text"
+    ]
+    structured = result.get("structuredContent")
+    if isinstance(structured, Mapping):
+        fragments.append(json.dumps(structured, ensure_ascii=True, separators=(",", ":")))
+    text = " ".join(fragment for fragment in fragments if isinstance(fragment, str))[:20_000]
+    normalized = text.lower()
+    categories = (
+        ("authorization", ("permission", "forbidden", "not authorized", "access denied", "role")),
+        ("invalid_arguments", ("invalid argument", "validation", "required field")),
+        ("statement_rejected", ("only insert", "only select", "not allowed", "must be an insert")),
+        ("not_found", ("does not exist", "not found", "unknown database", "unknown table")),
+        ("sql_syntax", ("syntax error", "parse error")),
+        ("database", ("sqlstate", "database error", "cockroach")),
+    )
+    category = next(
+        (name for name, markers in categories if any(marker in normalized for marker in markers)),
+        "unknown",
+    )
+    state_match = re.search(
+        r"\bsqlstate\s*([0-9A-Z]{5})\b|\(([0-9A-Z]{5})\)",
+        text,
+        re.IGNORECASE,
+    )
+    state = next((group for group in state_match.groups() if group), None) if state_match else None
+    return category, state.upper() if state else None
 
 
 class ManagedMcpIncidentRepository:
