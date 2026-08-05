@@ -300,11 +300,17 @@ def test_tool_contract_rejects_invalid_catalogs(catalog, message) -> None:
 @pytest.mark.parametrize(
     ("message", "expected_category", "expected_sqlstate"),
     [
+        ("unauthorized service account API key", "authentication", None),
         ("permission denied for cluster", "authorization", None),
         ("invalid argument: database is required", "invalid_arguments", None),
         ("statement not allowed by tool", "statement_rejected", None),
         ("relation does not exist (SQLSTATE 42P01)", "not_found", "42P01"),
         ("syntax error at token (42601)", "sql_syntax", "42601"),
+        ("cluster_id does not match configured scope", "cluster_routing", None),
+        ("failed to connect to SQL endpoint", "connectivity", None),
+        ("failed to execute tool request", "tool_execution", None),
+        ("backend service unavailable", "service_unavailable", None),
+        ("internal server failure", "internal", None),
         ("opaque provider failure", "unknown", None),
     ],
 )

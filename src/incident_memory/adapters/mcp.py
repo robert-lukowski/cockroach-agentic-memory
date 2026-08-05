@@ -285,11 +285,35 @@ def _mcp_tool_error_category(result: Mapping[str, Any]) -> tuple[str, str | None
     text = " ".join(fragment for fragment in fragments if isinstance(fragment, str))[:20_000]
     normalized = text.lower()
     categories = (
-        ("authorization", ("permission", "forbidden", "not authorized", "access denied", "role")),
+        (
+            "authentication",
+            (
+                "unauthorized",
+                "authentication",
+                "invalid token",
+                "token expired",
+                "api key",
+            ),
+        ),
+        (
+            "authorization",
+            ("permission", "forbidden", "not authorized", "access denied", "role"),
+        ),
         ("invalid_arguments", ("invalid argument", "validation", "required field")),
         ("statement_rejected", ("only insert", "only select", "not allowed", "must be an insert")),
         ("not_found", ("does not exist", "not found", "unknown database", "unknown table")),
         ("sql_syntax", ("syntax error", "parse error")),
+        ("cluster_routing", ("cluster_id", "cluster id", "cluster access")),
+        (
+            "connectivity",
+            ("failed to connect", "connection refused", "connection reset", "dial tcp"),
+        ),
+        (
+            "tool_execution",
+            ("failed to execute", "execution failed", "failed to run", "tool call failed"),
+        ),
+        ("service_unavailable", ("unavailable", "no healthy", "timeout", "timed out")),
+        ("internal", ("internal error", "internal server")),
         ("database", ("sqlstate", "database error", "cockroach")),
     )
     category = next(
