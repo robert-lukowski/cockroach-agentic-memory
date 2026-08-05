@@ -305,9 +305,11 @@ class ManagedMcpIncidentRepository:
         query = (
             "SELECT id::STRING AS incident_id, scope, service, environment, title, symptoms, "
             "root_cause, resolution, tags, metadata, created_at::STRING AS created_at, "
-            f"1 - (embedding <=> '{vector}'::VECTOR) AS similarity "
+            "1 - distance AS similarity FROM ("
+            "SELECT id, scope, service, environment, title, symptoms, root_cause, resolution, "
+            f"tags, metadata, created_at, embedding <=> '{vector}'::VECTOR AS distance "
             f"FROM {_TABLE_NAME} WHERE {' AND '.join(predicates)} "
-            f"ORDER BY embedding <=> '{vector}'::VECTOR LIMIT {int(limit)}"
+            f"ORDER BY distance LIMIT {int(limit)}) AS nearest ORDER BY distance"
         )
         result = self._tool_caller.call_tool(
             "select_query",
@@ -318,7 +320,7 @@ class ManagedMcpIncidentRepository:
 
 
 def _vector_literal(values: Sequence[float]) -> str:
-    return "[" + ",".join(format(float(value), ".12g") for value in values) + "]"
+    return "[" + ",".join(format(float(value), ".7g") for value in values) + "]"
 
 
 def _sql_literal(value: str) -> str:

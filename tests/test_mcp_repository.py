@@ -91,6 +91,7 @@ def test_find_similar_builds_fixed_query_and_maps_rows(stored_incident) -> None:
     assert "scope = 'hackathon-demo'" in arguments["query"]
     assert "service = 'pay''ments'" in arguments["query"]
     assert "LIMIT 3" in arguments["query"]
+    assert arguments["query"].count("'[0.25,0.25,") == 1
 
 
 def test_extract_rows_supports_nested_result() -> None:
