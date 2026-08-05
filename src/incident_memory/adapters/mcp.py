@@ -203,7 +203,22 @@ def _decode_mcp_response(body: bytes, content_type: str) -> Mapping[str, Any]:
 
 
 def _json_rpc_result(response: Mapping[str, Any] | None) -> Mapping[str, Any]:
-    if response is None or "error" in response:
+    if response is None:
+        raise ExternalServiceError("CockroachDB Managed MCP")
+    if "error" in response:
+        error = response.get("error")
+        error_mapping = error if isinstance(error, Mapping) else {}
+        category, sqlstate = _mcp_tool_error_category(
+            {"structuredContent": error_mapping}
+        )
+        raw_code = error_mapping.get("code")
+        code = str(raw_code) if isinstance(raw_code, int) else "unknown"
+        logger.warning(
+            "mcp_rpc_error_%s_category_%s_sqlstate_%s",
+            code,
+            category,
+            sqlstate or "none",
+        )
         raise ExternalServiceError("CockroachDB Managed MCP")
     result = response.get("result")
     if not isinstance(result, Mapping):

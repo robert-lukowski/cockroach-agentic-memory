@@ -13,6 +13,7 @@ from incident_memory.adapters.mcp import (
     ManagedMcpToolClient,
     _decode_mcp_response,
     _extract_rows,
+    _json_rpc_result,
     _mcp_result_value,
     _mcp_tool_error_category,
     _tool_contract,
@@ -305,6 +306,21 @@ def test_mcp_tool_error_classification(message, expected_category, expected_sqls
     result = {"content": [{"type": "text", "text": message}], "isError": True}
 
     assert _mcp_tool_error_category(result) == (expected_category, expected_sqlstate)
+
+
+def test_json_rpc_error_logs_only_redacted_classification(caplog) -> None:
+    with caplog.at_level("WARNING"), pytest.raises(ExternalServiceError):
+        _json_rpc_result(
+            {
+                "error": {
+                    "code": -32602,
+                    "message": "invalid argument sensitive-provider-detail",
+                }
+            }
+        )
+
+    assert "mcp_rpc_error_-32602_category_invalid_arguments_sqlstate_none" in caplog.text
+    assert "sensitive-provider-detail" not in caplog.text
 
 
 def test_decode_mcp_response_rejects_invalid_payload() -> None:
