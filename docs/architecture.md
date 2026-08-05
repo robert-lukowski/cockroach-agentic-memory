@@ -9,12 +9,10 @@ future agentic tool loop is intentionally deferred.
 ## Request flow
 
 ```text
-IAM-signed client
-      |
-      v
-API Gateway REST API (AWS_IAM)
-      |
-      v
+IAM-signed client --------> API Gateway REST API <-------- ServiceNow scoped application
+  three original routes       IAM default + one exception     x-api-key, throttled/quota
+                                      |
+                                      v
 Python 3.13 Lambda -----> AWS Secrets Manager
       |                  (one MCP API-key secret, cached in-process)
       |
@@ -32,8 +30,9 @@ Python 3.13 Lambda -----> AWS Secrets Manager
 ```
 
 The Lambda calls public managed endpoints and does not require a VPC, NAT gateway, or database
-connection string. Managed MCP authentication is a dedicated service-account API key, while client
-access to the application remains AWS IAM authenticated.
+connection string. Managed MCP authentication is a dedicated service-account API key. The original
+application routes remain AWS IAM authenticated; the ServiceNow route alone uses a separate API
+Gateway API key because it is called by the scoped application REST Message.
 
 ## Deterministic workflows
 
@@ -59,6 +58,20 @@ access to the application remains AWS IAM authenticated.
    repository evidence by application code.
 
 There is no model-directed tool loop and no generic data-access method in the application layer.
+
+### Analyze from ServiceNow
+
+1. API Gateway requires the dedicated `x-api-key` on `/servicenow/analyze`; the API-wide IAM default
+   continues to apply to every original route.
+2. The handler rejects bodies over 32 KiB and strictly validates the exact 12-field payload emitted
+   by `AgenticMemoryClient`.
+3. Application code maps populated incident fields to `InvestigationRequest`, applying the
+   deployment-owned `SERVICENOW_MEMORY_SCOPE` and fixed `top_k=5`.
+4. The existing investigation service performs embedding, scoped retrieval, evidence validation,
+   and grounded recommendation generation without duplicated adapter logic.
+5. The response contains only `recommendation` and repository-derived
+   `supporting_incident_ids`, matching the existing ServiceNow response parser.
+6. The active, unresolved ServiceNow record is not sent through `create_incident` and is not stored.
 
 ## Ports and adapters
 
@@ -115,6 +128,7 @@ Unexpected stack traces must still be treated as sensitive operational data and 
 The SAM template creates or updates:
 
 - one regional API Gateway REST API and `v1` stage with default `AWS_IAM` authorization;
+- one generated API key, usage plan, and key association for the ServiceNow route only;
 - one Python 3.13 Lambda function;
 - one named Lambda execution role with inline policies for CloudWatch Logs, the two configured
   Bedrock models, and exactly one Secrets Manager secret;
@@ -131,8 +145,9 @@ the stack. CockroachDB Cloud resources are also outside CloudFormation.
 - Managed MCP adds an external network dependency to each repository operation.
 - The service-account API key is cached until a cold start; rotation requires overlapping validity
   or a function restart strategy.
-- No retry, circuit breaker, asynchronous ingestion, rate limiting, WAF, or dead-letter queue is in
-  the MVP.
+- API Gateway usage-plan throttles and quotas are best-effort development controls, not hard cost or
+  security boundaries. There is no WAF, private connectivity, or ServiceNow OAuth/mTLS identity.
+- No retry, circuit breaker, asynchronous ingestion, or dead-letter queue is in the MVP.
 - Tenant isolation is a validated scope convention, not a full authorization policy. A production
   design must derive scope from trusted identity rather than accepting it directly from the body.
 - Bedrock output is grounded by instruction and supplied evidence but remains probabilistic.

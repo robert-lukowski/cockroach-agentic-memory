@@ -3,7 +3,11 @@
 import pytest
 
 from incident_memory.errors import ValidationError
-from incident_memory.models import IncidentCreateRequest, InvestigationRequest
+from incident_memory.models import (
+    IncidentCreateRequest,
+    InvestigationRequest,
+    ServiceNowAnalyzeRequest,
+)
 
 
 def valid_incident_payload() -> dict[str, object]:
@@ -17,6 +21,23 @@ def valid_incident_payload() -> dict[str, object]:
         "resolution": "Bound concurrency and raised the pool limit.",
         "tags": ["database", "database", "latency"],
         "metadata": {"severity": "SEV-2"},
+    }
+
+
+def valid_servicenow_payload() -> dict[str, object]:
+    return {
+        "incident_sys_id": "0123456789abcdef0123456789abcdef",
+        "number": "INC0012345",
+        "short_description": "Checkout requests are timing out",
+        "description": "Database waits rose after a traffic increase.",
+        "category": "Software",
+        "subcategory": "Database",
+        "priority": "2 - High",
+        "impact": "2 - Medium",
+        "urgency": "1 - High",
+        "assignment_group": "Payments SRE",
+        "cmdb_ci": "payments-api",
+        "opened_at": "2026-08-05 10:00:00",
     }
 
 
@@ -87,3 +108,55 @@ def test_investigation_request_rejects_invalid_top_k(top_k: object) -> None:
         InvestigationRequest.from_payload(
             {"scope": "hackathon-demo", "symptoms": "Latency is rising", "top_k": top_k}
         )
+
+
+def test_servicenow_request_maps_to_server_scoped_investigation() -> None:
+    request = ServiceNowAnalyzeRequest.from_payload(valid_servicenow_payload())
+
+    investigation = request.as_investigation(scope="servicenow-dev")
+
+    assert investigation.scope == "servicenow-dev"
+    assert investigation.service is None
+    assert investigation.environment is None
+    assert investigation.top_k == 5
+    assert "Short description: Checkout requests are timing out" in investigation.symptoms
+    assert "Description: Database waits rose" in investigation.symptoms
+    assert request.incident_sys_id not in investigation.symptoms
+
+
+@pytest.mark.parametrize("field", ["incident_sys_id", "number", "short_description", "opened_at"])
+def test_servicenow_request_rejects_missing_fields(field: str) -> None:
+    payload = valid_servicenow_payload()
+    del payload[field]
+
+    with pytest.raises(ValidationError, match="missing"):
+        ServiceNowAnalyzeRequest.from_payload(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("incident_sys_id", "not-a-sys-id", "32-character hexadecimal"),
+        ("number", "", "non-empty"),
+        ("short_description", 42, "must be a string"),
+        ("description", "x" * 8_001, "at most 8000"),
+    ],
+)
+def test_servicenow_request_rejects_invalid_values(
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    payload = valid_servicenow_payload()
+    payload[field] = value
+
+    with pytest.raises(ValidationError, match=message):
+        ServiceNowAnalyzeRequest.from_payload(payload)
+
+
+def test_servicenow_request_rejects_unknown_fields() -> None:
+    payload = valid_servicenow_payload()
+    payload["sql"] = "SELECT 1"
+
+    with pytest.raises(ValidationError, match="unsupported"):
+        ServiceNowAnalyzeRequest.from_payload(payload)

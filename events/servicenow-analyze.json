@@ -1,0 +1,13 @@
+{
+  "resource": "/servicenow/analyze",
+  "path": "/servicenow/analyze",
+  "httpMethod": "POST",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "requestContext": {
+    "requestId": "local-servicenow-request"
+  },
+  "body": "{\"incident_sys_id\":\"0123456789abcdef0123456789abcdef\",\"number\":\"INC0012345\",\"short_description\":\"Checkout requests are timing out\",\"description\":\"Database waits rose after a traffic increase.\",\"category\":\"Software\",\"subcategory\":\"Database\",\"priority\":\"2 - High\",\"impact\":\"2 - Medium\",\"urgency\":\"1 - High\",\"assignment_group\":\"Payments SRE\",\"cmdb_ci\":\"payments-api\",\"opened_at\":\"2026-08-05 10:00:00\"}",
+  "isBase64Encoded": false
+}

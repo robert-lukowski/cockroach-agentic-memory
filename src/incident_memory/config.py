@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Self
 
 from incident_memory.models import EMBEDDING_DIMENSIONS
+
+_SCOPE_PATTERN = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._:-]{0,63}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +27,7 @@ class Settings:
     mcp_secret_arn: str
     cockroach_cluster_id: str
     cockroach_database: str
+    servicenow_memory_scope: str
     issues: tuple[str, ...] = ()
 
     @classmethod
@@ -44,6 +48,11 @@ class Settings:
         cockroach_cluster_id = values.get("COCKROACH_CLUSTER_ID", "")
         generation_model_id = values.get("BEDROCK_GENERATION_MODEL_ID", "")
         embedding_model_id = values.get("BEDROCK_EMBEDDING_MODEL_ID", "")
+        servicenow_memory_scope = values.get("SERVICENOW_MEMORY_SCOPE", "servicenow-dev")
+        if _SCOPE_PATTERN.fullmatch(servicenow_memory_scope) is None:
+            issues.append(
+                "SERVICENOW_MEMORY_SCOPE must be 1-64 characters using letters, numbers, ._:-."
+            )
         if app_mode == "live":
             required_values = {
                 "MCP_SECRET_ARN": mcp_secret_arn,
@@ -67,6 +76,7 @@ class Settings:
             mcp_secret_arn=mcp_secret_arn,
             cockroach_cluster_id=cockroach_cluster_id,
             cockroach_database=values.get("COCKROACH_DATABASE", "defaultdb"),
+            servicenow_memory_scope=servicenow_memory_scope,
             issues=tuple(issues),
         )
 

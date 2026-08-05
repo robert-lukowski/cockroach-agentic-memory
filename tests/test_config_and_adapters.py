@@ -69,3 +69,10 @@ def test_live_configuration_reports_missing_required_values() -> None:
 
     assert settings.live_adapters_enabled is False
     assert len(settings.issues) == 4
+
+
+def test_invalid_servicenow_scope_fails_configuration_closed() -> None:
+    settings = Settings.from_environment({"SERVICENOW_MEMORY_SCOPE": "invalid scope"})
+
+    assert settings.live_adapters_enabled is False
+    assert any("SERVICENOW_MEMORY_SCOPE" in issue for issue in settings.issues)

@@ -2,12 +2,15 @@
 
 import base64
 import json
+import logging
 from dataclasses import dataclass
 
 from handler import create_lambda_handler, lambda_handler
 from incident_memory.config import Settings
+from incident_memory.errors import ExternalServiceError
 from incident_memory.service import IncidentMemoryService
 from tests.fakes import MockBedrockGateway, MockMcpIncidentRepository
+from tests.test_models import valid_servicenow_payload
 
 
 @dataclass
@@ -197,3 +200,95 @@ def test_unknown_route_returns_not_found() -> None:
     response = lambda_handler(api_event("GET", "/unknown"), FakeContext())
 
     assert response["statusCode"] == 404
+
+
+def test_servicenow_analyze_reuses_investigation_without_storing(evidence) -> None:
+    repository = MockMcpIncidentRepository(evidence=[evidence])
+    bedrock = MockBedrockGateway(recommendation="Inspect connection saturation.")
+    handler = create_lambda_handler(
+        service=IncidentMemoryService(bedrock=bedrock, repository=repository),
+        settings=Settings.from_environment({"SERVICENOW_MEMORY_SCOPE": "hackathon-demo"}),
+    )
+
+    response = handler(
+        api_event("POST", "/servicenow/analyze", valid_servicenow_payload()),
+        FakeContext(),
+    )
+    body = json.loads(response["body"])
+
+    assert response["statusCode"] == 200
+    assert body == {
+        "recommendation": "Inspect connection saturation.",
+        "supporting_incident_ids": [str(evidence.incident.incident_id)],
+    }
+    assert repository.saved == []
+    assert repository.search_calls[0]["scope"] == "hackathon-demo"
+    assert bedrock.generation_calls
+
+
+def test_servicenow_analyze_rejects_oversized_body() -> None:
+    handler = create_lambda_handler(
+        service=IncidentMemoryService(
+            bedrock=MockBedrockGateway(),
+            repository=MockMcpIncidentRepository(),
+        ),
+        settings=Settings.from_environment({}),
+    )
+    event = api_event("POST", "/servicenow/analyze")
+    event["body"] = json.dumps({"description": "x" * (33 * 1024)})
+
+    response = handler(event, FakeContext())
+    body = json.loads(response["body"])
+
+    assert response["statusCode"] == 400
+    assert body["error"]["code"] == "validation_error"
+    assert "32768" in body["error"]["message"]
+
+
+def test_servicenow_analyze_returns_safe_mcp_failure(caplog) -> None:
+    class FailingRepository(MockMcpIncidentRepository):
+        def find_similar(self, **kwargs):
+            raise ExternalServiceError("CockroachDB Managed MCP")
+
+    sensitive_description = "PRIVATE-DESCRIPTION-MUST-NOT-BE-LOGGED"
+    payload = valid_servicenow_payload()
+    payload["description"] = sensitive_description
+    handler = create_lambda_handler(
+        service=IncidentMemoryService(
+            bedrock=MockBedrockGateway(),
+            repository=FailingRepository(),
+        ),
+        settings=Settings.from_environment({}),
+    )
+
+    with caplog.at_level(logging.INFO):
+        response = handler(api_event("POST", "/servicenow/analyze", payload), FakeContext())
+    body = json.loads(response["body"])
+
+    assert response["statusCode"] == 502
+    assert body["error"]["code"] == "external_service_error"
+    assert sensitive_description not in caplog.text
+    assert sensitive_description not in response["body"]
+
+
+def test_servicenow_analyze_returns_safe_bedrock_failure() -> None:
+    class FailingBedrock(MockBedrockGateway):
+        def generate_embedding(self, text: str):
+            raise ExternalServiceError("Amazon Bedrock")
+
+    handler = create_lambda_handler(
+        service=IncidentMemoryService(
+            bedrock=FailingBedrock(),
+            repository=MockMcpIncidentRepository(),
+        ),
+        settings=Settings.from_environment({}),
+    )
+
+    response = handler(
+        api_event("POST", "/servicenow/analyze", valid_servicenow_payload()),
+        FakeContext(),
+    )
+    body = json.loads(response["body"])
+
+    assert response["statusCode"] == 502
+    assert body["error"]["code"] == "external_service_error"

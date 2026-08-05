@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Self
@@ -24,6 +25,21 @@ _INCIDENT_REQUIRED_FIELDS = {
 _INCIDENT_OPTIONAL_FIELDS = {"tags", "metadata"}
 _INVESTIGATION_REQUIRED_FIELDS = {"scope", "symptoms"}
 _INVESTIGATION_OPTIONAL_FIELDS = {"service", "environment", "top_k"}
+_SERVICENOW_REQUIRED_FIELDS = {
+    "incident_sys_id",
+    "number",
+    "short_description",
+    "description",
+    "category",
+    "subcategory",
+    "priority",
+    "impact",
+    "urgency",
+    "assignment_group",
+    "cmdb_ci",
+    "opened_at",
+}
+_SERVICENOW_SYS_ID = re.compile(r"[0-9a-fA-F]{32}")
 
 
 def _require_object(payload: object) -> dict[str, Any]:
@@ -75,6 +91,33 @@ def _optional_string(payload: dict[str, Any], field: str, *, maximum: int) -> st
             details={"field": field},
         )
     normalized = value.strip()
+    if len(normalized) > maximum:
+        raise ValidationError(
+            f"{field} must contain at most {maximum} characters.",
+            details={"field": field, "maximum": maximum},
+        )
+    return normalized
+
+
+def _bounded_string(
+    payload: dict[str, Any],
+    field: str,
+    *,
+    maximum: int,
+    allow_empty: bool = True,
+) -> str:
+    value = payload.get(field)
+    if not isinstance(value, str):
+        raise ValidationError(
+            f"{field} must be a string.",
+            details={"field": field},
+        )
+    normalized = value.strip()
+    if not allow_empty and not normalized:
+        raise ValidationError(
+            f"{field} must be a non-empty string.",
+            details={"field": field},
+        )
     if len(normalized) > maximum:
         raise ValidationError(
             f"{field} must contain at most {maximum} characters.",
@@ -184,6 +227,83 @@ class InvestigationRequest:
             service=_optional_string(payload, "service", maximum=128),
             environment=_optional_string(payload, "environment", maximum=64),
             top_k=raw_top_k,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ServiceNowAnalyzeRequest:
+    """Validated payload emitted by the scoped ServiceNow application."""
+
+    incident_sys_id: str
+    number: str
+    short_description: str
+    description: str
+    category: str
+    subcategory: str
+    priority: str
+    impact: str
+    urgency: str
+    assignment_group: str
+    cmdb_ci: str
+    opened_at: str
+
+    @classmethod
+    def from_payload(cls, raw_payload: object) -> Self:
+        payload = _require_object(raw_payload)
+        _validate_fields(payload, required=_SERVICENOW_REQUIRED_FIELDS, optional=set())
+        incident_sys_id = _bounded_string(
+            payload,
+            "incident_sys_id",
+            maximum=32,
+            allow_empty=False,
+        )
+        if _SERVICENOW_SYS_ID.fullmatch(incident_sys_id) is None:
+            raise ValidationError(
+                "incident_sys_id must be a 32-character hexadecimal identifier.",
+                details={"field": "incident_sys_id"},
+            )
+        return cls(
+            incident_sys_id=incident_sys_id.lower(),
+            number=_bounded_string(payload, "number", maximum=40, allow_empty=False),
+            short_description=_bounded_string(
+                payload,
+                "short_description",
+                maximum=256,
+                allow_empty=False,
+            ),
+            description=_bounded_string(payload, "description", maximum=8_000),
+            category=_bounded_string(payload, "category", maximum=128),
+            subcategory=_bounded_string(payload, "subcategory", maximum=128),
+            priority=_bounded_string(payload, "priority", maximum=32),
+            impact=_bounded_string(payload, "impact", maximum=32),
+            urgency=_bounded_string(payload, "urgency", maximum=32),
+            assignment_group=_bounded_string(payload, "assignment_group", maximum=256),
+            cmdb_ci=_bounded_string(payload, "cmdb_ci", maximum=256),
+            opened_at=_bounded_string(payload, "opened_at", maximum=64),
+        )
+
+    def as_investigation(self, *, scope: str) -> InvestigationRequest:
+        """Map ServiceNow fields into the existing deterministic investigation workflow."""
+        fields = (
+            ("Number", self.number),
+            ("Short description", self.short_description),
+            ("Description", self.description),
+            ("Category", self.category),
+            ("Subcategory", self.subcategory),
+            ("Priority", self.priority),
+            ("Impact", self.impact),
+            ("Urgency", self.urgency),
+            ("Assignment group", self.assignment_group),
+            ("Configuration item", self.cmdb_ci),
+            ("Opened at", self.opened_at),
+        )
+        symptoms = "\n".join(f"{label}: {value}" for label, value in fields if value)
+        return InvestigationRequest(
+            scope=scope,
+            symptoms=symptoms,
+            service=None,
+            environment=None,
+            top_k=5,
         )
 
 

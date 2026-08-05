@@ -34,6 +34,11 @@ Parameters:
   McpUrl:
     Type: String
     Default: https://cockroachlabs.cloud/mcp
+  ServiceNowMemoryScope:
+    Type: String
+    Default: servicenow-dev
+    AllowedPattern: "[a-zA-Z0-9][a-zA-Z0-9._:-]*"
+    MaxLength: 64
 
 Globals:
   Function:
@@ -54,6 +59,7 @@ Globals:
         MCP_SECRET_ARN: !Ref McpSecretArn
         COCKROACH_CLUSTER_ID: !Ref CockroachClusterId
         COCKROACH_DATABASE: !Ref CockroachDatabase
+        SERVICENOW_MEMORY_SCOPE: !Ref ServiceNowMemoryScope
 
 Resources:
   IncidentMemoryApi:
@@ -133,6 +139,15 @@ Resources:
             RestApiId: !Ref IncidentMemoryApi
             Path: /investigations
             Method: POST
+        ServiceNowAnalyze:
+          Type: Api
+          Properties:
+            RestApiId: !Ref IncidentMemoryApi
+            Path: /servicenow/analyze
+            Method: POST
+            Auth:
+              Authorizer: NONE
+              ApiKeyRequired: true
     Metadata:
       BuildMethod: python3.13
 
@@ -142,6 +157,47 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${ApplicationName}-${EnvironmentName}"
       RetentionInDays: 14
 
+  ServiceNowApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: IncidentMemoryApiv1Stage
+    Properties:
+      Name: !Sub "${ApplicationName}-${EnvironmentName}-servicenow"
+      Description: Dedicated API key for the ServiceNow scoped application
+      Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ServiceNowUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: IncidentMemoryApiv1Stage
+    Properties:
+      UsagePlanName: !Sub "${ApplicationName}-${EnvironmentName}-servicenow"
+      Description: Throttled development access for ServiceNow incident analysis
+      ApiStages:
+        - ApiId: !Ref IncidentMemoryApi
+          Stage: v1
+      Throttle:
+        BurstLimit: 2
+        RateLimit: 1
+      Quota:
+        Limit: 100
+        Period: DAY
+      Tags:
+        - Key: Project
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ServiceNowUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ServiceNowApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ServiceNowUsagePlan
+
 Outputs:
   ApiUrl:
     Description: IAM-authenticated REST API base URL
@@ -149,3 +205,6 @@ Outputs:
   FunctionName:
     Description: Lambda function name
     Value: !Ref IncidentMemoryFunction
+  ServiceNowAnalyzeUrl:
+    Description: API-key-protected ServiceNow analysis endpoint
+    Value: !Sub "https://${IncidentMemoryApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/v1/servicenow/analyze"

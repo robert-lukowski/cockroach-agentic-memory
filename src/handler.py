@@ -12,13 +12,18 @@ from typing import Any
 from incident_memory.bootstrap import build_service
 from incident_memory.config import Settings
 from incident_memory.errors import ApplicationError, ValidationError
-from incident_memory.models import IncidentCreateRequest, InvestigationRequest
+from incident_memory.models import (
+    IncidentCreateRequest,
+    InvestigationRequest,
+    ServiceNowAnalyzeRequest,
+)
 from incident_memory.service import IncidentMemoryService
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 LambdaResponse = dict[str, Any]
+_SERVICENOW_MAX_BODY_BYTES = 32 * 1024
 
 
 def _response(status_code: int, payload: Mapping[str, Any]) -> LambdaResponse:
@@ -47,17 +52,28 @@ def _route(event: Mapping[str, Any]) -> tuple[str, str]:
     return str(method).upper(), str(path)
 
 
-def _json_body(event: Mapping[str, Any]) -> object:
+def _json_body(event: Mapping[str, Any], *, maximum_bytes: int | None = None) -> object:
     raw_body = event.get("body")
     if isinstance(raw_body, dict):
+        if maximum_bytes is not None:
+            body_size = len(
+                json.dumps(raw_body, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            )
+            if body_size > maximum_bytes:
+                raise ValidationError(f"Request body must not exceed {maximum_bytes} bytes.")
         return raw_body
     if not isinstance(raw_body, str) or not raw_body.strip():
         raise ValidationError("Request body must contain JSON.")
     if event.get("isBase64Encoded"):
         try:
-            raw_body = base64.b64decode(raw_body, validate=True).decode("utf-8")
+            body_bytes = base64.b64decode(raw_body, validate=True)
+            if maximum_bytes is not None and len(body_bytes) > maximum_bytes:
+                raise ValidationError(f"Request body must not exceed {maximum_bytes} bytes.")
+            raw_body = body_bytes.decode("utf-8")
         except (binascii.Error, UnicodeDecodeError) as error:
             raise ValidationError("Request body is not valid base64-encoded UTF-8.") from error
+    elif maximum_bytes is not None and len(raw_body.encode("utf-8")) > maximum_bytes:
+        raise ValidationError(f"Request body must not exceed {maximum_bytes} bytes.")
     try:
         return json.loads(raw_body)
     except json.JSONDecodeError as error:
@@ -85,6 +101,22 @@ def create_lambda_handler(
                 request = InvestigationRequest.from_payload(_json_body(event))
                 result = service.investigate(request)
                 return _response(200, result.as_dict())
+            if (method, path) == ("POST", "/servicenow/analyze"):
+                servicenow_request = ServiceNowAnalyzeRequest.from_payload(
+                    _json_body(event, maximum_bytes=_SERVICENOW_MAX_BODY_BYTES)
+                )
+                result = service.investigate(
+                    servicenow_request.as_investigation(scope=settings.servicenow_memory_scope)
+                )
+                return _response(
+                    200,
+                    {
+                        "recommendation": result.recommendation,
+                        "supporting_incident_ids": [
+                            str(item.incident.incident_id) for item in result.evidence
+                        ],
+                    },
+                )
             return _response(
                 404,
                 {
