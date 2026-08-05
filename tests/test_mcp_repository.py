@@ -201,7 +201,9 @@ class FakeSdkModel:
         return self.value
 
 
-def test_tool_client_uses_one_sdk_session_for_initialize_list_and_call(monkeypatch) -> None:
+def test_tool_client_uses_one_sdk_session_for_initialize_list_and_call(
+    monkeypatch, caplog
+) -> None:
     events: list[tuple[str, int | None]] = []
     clients: list[Any] = []
     sessions: list[Any] = []
@@ -265,6 +267,7 @@ def test_tool_client_uses_one_sdk_session_for_initialize_list_and_call(monkeypat
                                 "properties": {
                                     "database": {"type": "string"},
                                     "query": {"type": "string"},
+                                    "sensitive_provider_property": {"type": "string"},
                                 },
                                 "required": ["database", "query"],
                             },
@@ -291,9 +294,10 @@ def test_tool_client_uses_one_sdk_session_for_initialize_list_and_call(monkeypat
         api_key_provider=FakeApiKeyProvider(),
     )
 
-    result = client.call_tool(
-        "select_query", {"database": "defaultdb", "query": "fixed"}
-    )
+    with caplog.at_level("INFO"):
+        result = client.call_tool(
+            "select_query", {"database": "defaultdb", "query": "fixed"}
+        )
 
     assert result == {"rows": []}
     assert len(sessions) == 1
@@ -309,6 +313,11 @@ def test_tool_client_uses_one_sdk_session_for_initialize_list_and_call(monkeypat
         "Authorization": "Bearer not-a-real-secret",
         "mcp-cluster-id": "11111111-1111-4111-8111-111111111111",
     }
+    assert "mcp_session_initialized" in caplog.text
+    assert "mcp_tools_listed" in caplog.text
+    assert "mcp_tool_completed" in caplog.text
+    assert "sensitive_provider_property" not in caplog.text
+    assert "not-a-real-secret" not in caplog.text
 
 
 def test_tool_client_invalidates_cached_key_on_auth_http_response() -> None:

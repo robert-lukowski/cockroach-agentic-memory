@@ -98,15 +98,7 @@ class ManagedMcpToolClient:
                         logger.info("mcp_session_initialized")
                         tools_result = await session.list_tools()
                         logger.info("mcp_tools_listed")
-                        properties, required = _tool_contract(
-                            _sdk_mapping(tools_result), name
-                        )
-                        logger.info(
-                            "mcp_tool_contract_%s_properties_%s_required_%s",
-                            name,
-                            ",".join(properties),
-                            ",".join(required),
-                        )
+                        _tool_contract(_sdk_mapping(tools_result), name)
                         tool_result = await session.call_tool(name, arguments)
         except MCPError as error:
             _log_mcp_error(error)
