@@ -117,7 +117,10 @@ class ManagedMcpToolClient:
                 "jsonrpc": "2.0",
                 "id": 3,
                 "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
+                "params": {
+                    "name": name,
+                    "arguments": {**arguments, "cluster_id": self._cluster_id},
+                },
             },
             api_key=api_key,
             session_id=session_id,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from email.message import Message
 from typing import Any
@@ -245,6 +246,11 @@ def test_tool_client_performs_mcp_handshake_and_decodes_sse() -> None:
     assert len(opener.requests) == 4
     assert opener.requests[1][0].get_header("Mcp-session-id") == "test-session"
     assert opener.requests[3][0].get_header("Mcp-protocol-version") == "2025-06-18"
+    tool_call = json.loads(opener.requests[3][0].data)
+    assert tool_call["params"]["arguments"] == {
+        "cluster_id": "11111111-1111-4111-8111-111111111111",
+        "query": "fixed",
+    }
 
 
 def test_tool_contract_returns_static_property_types_and_required_fields() -> None:
