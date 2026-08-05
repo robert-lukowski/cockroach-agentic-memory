@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
-import json
+import asyncio
 from collections.abc import Mapping
-from email.message import Message
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from mcp.shared.exceptions import MCPError
 
+import incident_memory.adapters.mcp as mcp_adapter
 from incident_memory.adapters.mcp import (
     ManagedMcpIncidentRepository,
     ManagedMcpToolClient,
-    _decode_mcp_response,
     _extract_rows,
-    _json_rpc_result,
+    _log_mcp_error,
     _mcp_result_value,
     _mcp_tool_error_category,
+    _sdk_mapping,
     _tool_contract,
 )
 from incident_memory.errors import AdapterContractError, ExternalServiceError
@@ -137,7 +140,7 @@ def test_tool_client_runs_allowlisted_call(monkeypatch) -> None:
         api_key_provider=object(),
     )
 
-    def fake_call(name, arguments):
+    async def fake_call(name, arguments):
         return {"name": name, "arguments": arguments}
 
     monkeypatch.setattr(client, "_call_tool", fake_call)
@@ -155,7 +158,7 @@ def test_tool_client_redacts_transport_failure(monkeypatch) -> None:
         api_key_provider=object(),
     )
 
-    def fail_call(name, arguments):
+    async def fail_call(name, arguments):
         del name, arguments
         raise RuntimeError("sensitive-transport-detail")
 
@@ -177,80 +180,156 @@ def test_tool_client_rejects_non_managed_endpoint() -> None:
 
 
 class FakeApiKeyProvider:
+    def __init__(self) -> None:
+        self.invalidations = 0
+
     def get_api_key(self) -> str:
         return "not-a-real-secret"
 
-
-class FakeHttpResponse:
-    def __init__(self, body: bytes, *, content_type: str, session_id: str | None = None) -> None:
-        self._body = body
-        self.headers = Message()
-        self.headers["Content-Type"] = content_type
-        if session_id:
-            self.headers["Mcp-Session-Id"] = session_id
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
-
-    def read(self, maximum: int) -> bytes:
-        return self._body[:maximum]
+    def invalidate(self) -> None:
+        self.invalidations += 1
 
 
-class FakeOpener:
-    def __init__(self) -> None:
-        self.requests = []
-        self.responses = [
-            FakeHttpResponse(
-                b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18"}}',
-                content_type="application/json",
-                session_id="test-session",
-            ),
-            FakeHttpResponse(b"", content_type="application/json"),
-            FakeHttpResponse(
-                (
-                    b'{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":'
-                    b'"select_query","inputSchema":{"type":"object","properties":'
-                    b'{"query":{"type":"string"}},"required":["query"]}}]}}'
-                ),
-                content_type="application/json",
-            ),
-            FakeHttpResponse(
-                (
-                    b'data: {"jsonrpc":"2.0","id":3,"result":{"content":[],'
-                    b'"structuredContent":{"rows":[]}}}\n\n'
-                ),
-                content_type="text/event-stream",
-            ),
-        ]
+class FakeSdkModel:
+    def __init__(self, value: Mapping[str, Any]) -> None:
+        self.value = value
 
-    def open(self, request, timeout):
-        self.requests.append((request, timeout))
-        return self.responses.pop(0)
+    def model_dump(self, *, by_alias: bool, exclude_none: bool) -> Mapping[str, Any]:
+        assert by_alias is True
+        assert exclude_none is True
+        return self.value
 
 
-def test_tool_client_performs_mcp_handshake_and_decodes_sse() -> None:
+def test_tool_client_uses_one_sdk_session_for_initialize_list_and_call(monkeypatch) -> None:
+    events: list[tuple[str, int | None]] = []
+    clients: list[Any] = []
+    sessions: list[Any] = []
+
+    class FakeHttpClient:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+            clients.append(self)
+
+        async def __aenter__(self):
+            events.append(("http_enter", None))
+            return self
+
+        async def __aexit__(self, *args):
+            events.append(("http_exit", None))
+            return False
+
+    @asynccontextmanager
+    async def fake_streamable_http_client(url, *, http_client):
+        assert url == "https://cockroachlabs.cloud/mcp"
+        assert http_client is clients[0]
+        events.append(("transport_enter", None))
+        yield "read-stream", "write-stream"
+        events.append(("transport_exit", None))
+
+    class FakeClientSession:
+        def __init__(self, read_stream, write_stream, *, read_timeout_seconds) -> None:
+            assert (read_stream, write_stream) == ("read-stream", "write-stream")
+            assert read_timeout_seconds == 20.0
+            self.entered = False
+            self.initialized = False
+            self.tools_listed = False
+            sessions.append(self)
+
+        async def __aenter__(self):
+            self.entered = True
+            events.append(("session_enter", id(self)))
+            return self
+
+        async def __aexit__(self, *args):
+            events.append(("session_exit", id(self)))
+            self.entered = False
+            return False
+
+        async def initialize(self):
+            assert self.entered
+            self.initialized = True
+            events.append(("initialize", id(self)))
+
+        async def list_tools(self):
+            assert self.entered and self.initialized
+            self.tools_listed = True
+            events.append(("list_tools", id(self)))
+            return FakeSdkModel(
+                {
+                    "tools": [
+                        {
+                            "name": "select_query",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "database": {"type": "string"},
+                                    "query": {"type": "string"},
+                                },
+                                "required": ["database", "query"],
+                            },
+                        }
+                    ]
+                }
+            )
+
+        async def call_tool(self, name, arguments):
+            assert self.entered and self.initialized and self.tools_listed
+            events.append(("call_tool", id(self)))
+            assert name == "select_query"
+            assert arguments == {"database": "defaultdb", "query": "fixed"}
+            return FakeSdkModel(
+                {"content": [], "structuredContent": {"rows": []}, "isError": False}
+            )
+
+    monkeypatch.setattr(mcp_adapter.httpx2, "AsyncClient", FakeHttpClient)
+    monkeypatch.setattr(mcp_adapter, "streamable_http_client", fake_streamable_http_client)
+    monkeypatch.setattr(mcp_adapter, "ClientSession", FakeClientSession)
     client = ManagedMcpToolClient(
         url="https://cockroachlabs.cloud/mcp",
         cluster_id="11111111-1111-4111-8111-111111111111",
         api_key_provider=FakeApiKeyProvider(),
     )
-    opener = FakeOpener()
-    client._opener = opener
 
-    result = client.call_tool("select_query", {"query": "fixed"})
+    result = client.call_tool(
+        "select_query", {"database": "defaultdb", "query": "fixed"}
+    )
 
     assert result == {"rows": []}
-    assert len(opener.requests) == 4
-    assert opener.requests[1][0].get_header("Mcp-session-id") == "test-session"
-    assert opener.requests[3][0].get_header("Mcp-protocol-version") == "2025-06-18"
-    tool_call = json.loads(opener.requests[3][0].data)
-    assert tool_call["params"]["arguments"] == {
-        "cluster_id": "11111111-1111-4111-8111-111111111111",
-        "query": "fixed",
+    assert len(sessions) == 1
+    session_id = id(sessions[0])
+    assert [(name, owner) for name, owner in events if owner is not None] == [
+        ("session_enter", session_id),
+        ("initialize", session_id),
+        ("list_tools", session_id),
+        ("call_tool", session_id),
+        ("session_exit", session_id),
+    ]
+    assert clients[0].kwargs["headers"] == {
+        "Authorization": "Bearer not-a-real-secret",
+        "mcp-cluster-id": "11111111-1111-4111-8111-111111111111",
     }
+
+
+def test_tool_client_invalidates_cached_key_on_auth_http_response() -> None:
+    provider = FakeApiKeyProvider()
+    client = ManagedMcpToolClient(
+        url="https://cockroachlabs.cloud/mcp",
+        cluster_id="11111111-1111-4111-8111-111111111111",
+        api_key_provider=provider,
+    )
+
+    asyncio.run(client._observe_response(SimpleNamespace(status_code=401)))
+    asyncio.run(client._observe_response(SimpleNamespace(status_code=200)))
+
+    assert provider.invalidations == 1
+
+
+def test_sdk_mapping_uses_aliases_and_rejects_unknown_value() -> None:
+    assert _sdk_mapping(FakeSdkModel({"structuredContent": {"rows": []}})) == {
+        "structuredContent": {"rows": []}
+    }
+    with pytest.raises(AdapterContractError, match="invalid SDK result"):
+        _sdk_mapping(object())
 
 
 def test_tool_contract_returns_static_property_types_and_required_fields() -> None:
@@ -320,24 +399,13 @@ def test_mcp_tool_error_classification(message, expected_category, expected_sqls
     assert _mcp_tool_error_category(result) == (expected_category, expected_sqlstate)
 
 
-def test_json_rpc_error_logs_only_redacted_classification(caplog) -> None:
-    with caplog.at_level("WARNING"), pytest.raises(ExternalServiceError):
-        _json_rpc_result(
-            {
-                "error": {
-                    "code": -32602,
-                    "message": "invalid argument sensitive-provider-detail",
-                }
-            }
-        )
+def test_sdk_json_rpc_error_logs_only_redacted_classification(caplog) -> None:
+    error = MCPError(-32602, "invalid argument sensitive-provider-detail")
+    with caplog.at_level("WARNING"):
+        _log_mcp_error(error)
 
     assert "mcp_rpc_error_-32602_category_invalid_arguments_sqlstate_none" in caplog.text
     assert "sensitive-provider-detail" not in caplog.text
-
-
-def test_decode_mcp_response_rejects_invalid_payload() -> None:
-    with pytest.raises(AdapterContractError, match="invalid protocol"):
-        _decode_mcp_response(b"not-json", "application/json")
 
 
 def test_repository_rejects_invalid_incident_row(stored_incident) -> None:

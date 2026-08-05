@@ -76,9 +76,11 @@ The live adapters are composed only when `APP_MODE=live` and all required settin
 Otherwise bootstrap installs unavailable adapters, so data routes fail closed. Unit tests replace
 both ports with deterministic in-process fakes and perform no network calls.
 
-The MCP transport permits only `insert_rows` and `select_query`. The latter receives SQL created
-inside the repository adapter from a fixed query shape. Requests, prompts, and model output cannot
-provide SQL or an MCP tool name.
+The MCP transport uses the official Python SDK and permits only `insert_rows` and `select_query`.
+Each repository operation initializes, lists tools, and calls its allowlisted tool inside one
+uninterrupted Streamable HTTP `ClientSession`; the SDK owns JSON-RPC framing and session-ID
+handling. The query tool receives SQL created inside the repository adapter from a fixed query
+shape. Requests, prompts, and model output cannot provide SQL or an MCP tool name.
 
 ## Data model and vector retrieval
 

@@ -2,26 +2,30 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any, Protocol
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import UUID
+
+import httpx2
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+from mcp.shared.exceptions import MCPError
 
 from incident_memory.errors import AdapterContractError, ExternalServiceError
 from incident_memory.models import IncidentEvidence, StoredIncident
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+logging.getLogger("mcp").setLevel(logging.CRITICAL)
+logging.getLogger("httpx2").setLevel(logging.CRITICAL)
 
 _TABLE_NAME = "incident_memories"
-_MCP_PROTOCOL_VERSION = "2025-06-18"
-_MAX_RESPONSE_BYTES = 1_000_000
 
 
 class McpToolCaller(Protocol):
@@ -55,78 +59,60 @@ class ManagedMcpToolClient:
         self._cluster_id = cluster_id
         self._api_key_provider = api_key_provider
         self._timeout_seconds = timeout_seconds
-        self._opener = build_opener(_NoRedirectHandler())
 
     def call_tool(self, name: str, arguments: Mapping[str, Any]) -> Any:
         if name not in {"insert_rows", "select_query"}:
             raise AdapterContractError("The MCP adapter rejected a non-allowlisted tool.")
         try:
-            return self._call_tool(name, dict(arguments))
-        except AdapterContractError:
+            return asyncio.run(self._call_tool(name, dict(arguments)))
+        except (AdapterContractError, ExternalServiceError):
             raise
         except Exception as error:
             raise ExternalServiceError("CockroachDB Managed MCP") from error
 
-    def _call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+    async def _call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         api_key = self._api_key_provider.get_api_key()
         logger.info("mcp_credential_loaded")
-        initialized, session_id = self._post_json_rpc(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": _MCP_PROTOCOL_VERSION,
-                    "capabilities": {},
-                    "clientInfo": {
-                        "name": "agentic-incident-memory",
-                        "version": "0.1.0",
-                    },
-                },
-            },
-            api_key=api_key,
-            session_id=None,
-        )
-        logger.info("mcp_session_initialized")
-        negotiated_version = str(
-            _json_rpc_result(initialized).get("protocolVersion", _MCP_PROTOCOL_VERSION)
-        )
-        self._post_json_rpc(
-            {"jsonrpc": "2.0", "method": "notifications/initialized"},
-            api_key=api_key,
-            session_id=session_id,
-            protocol_version=negotiated_version,
-            allow_empty=True,
-        )
-        logger.info("mcp_client_initialized")
-        tools_response, _ = self._post_json_rpc(
-            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
-            api_key=api_key,
-            session_id=session_id,
-            protocol_version=negotiated_version,
-        )
-        properties, required = _tool_contract(_json_rpc_result(tools_response), name)
-        logger.info(
-            "mcp_tool_contract_%s_properties_%s_required_%s",
-            name,
-            ",".join(properties),
-            ",".join(required),
-        )
-        response, _ = self._post_json_rpc(
-            {
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {
-                    "name": name,
-                    "arguments": {**arguments, "cluster_id": self._cluster_id},
-                },
-            },
-            api_key=api_key,
-            session_id=session_id,
-            protocol_version=negotiated_version,
-        )
-        result = _json_rpc_result(response)
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "mcp-cluster-id": self._cluster_id,
+        }
+        try:
+            async with httpx2.AsyncClient(
+                headers=headers,
+                timeout=self._timeout_seconds,
+                follow_redirects=False,
+                trust_env=False,
+                event_hooks={"response": [self._observe_response]},
+            ) as http_client:
+                async with streamable_http_client(
+                    self._url,
+                    http_client=http_client,
+                ) as (read_stream, write_stream):
+                    async with ClientSession(
+                        read_stream,
+                        write_stream,
+                        read_timeout_seconds=self._timeout_seconds,
+                    ) as session:
+                        await session.initialize()
+                        logger.info("mcp_session_initialized")
+                        tools_result = await session.list_tools()
+                        logger.info("mcp_tools_listed")
+                        properties, required = _tool_contract(
+                            _sdk_mapping(tools_result), name
+                        )
+                        logger.info(
+                            "mcp_tool_contract_%s_properties_%s_required_%s",
+                            name,
+                            ",".join(properties),
+                            ",".join(required),
+                        )
+                        tool_result = await session.call_tool(name, arguments)
+        except MCPError as error:
+            _log_mcp_error(error)
+            raise ExternalServiceError("CockroachDB Managed MCP") from error
+
+        result = _sdk_mapping(tool_result)
         if result.get("isError") is True:
             category, sqlstate = _mcp_tool_error_category(result)
             logger.warning("mcp_tool_error_%s_sqlstate_%s", category, sqlstate or "none")
@@ -134,99 +120,24 @@ class ManagedMcpToolClient:
         logger.info("mcp_tool_completed", extra={"tool_name": name})
         return _mcp_result_value(result)
 
-    def _post_json_rpc(
-        self,
-        payload: Mapping[str, Any],
-        *,
-        api_key: str,
-        session_id: str | None,
-        protocol_version: str | None = None,
-        allow_empty: bool = False,
-    ) -> tuple[Mapping[str, Any] | None, str | None]:
-        headers = {
-            "Accept": "application/json, text/event-stream",
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "mcp-cluster-id": self._cluster_id,
-        }
-        if session_id:
-            headers["Mcp-Session-Id"] = session_id
-        if protocol_version:
-            headers["MCP-Protocol-Version"] = protocol_version
-        request = Request(
-            self._url,
-            data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        try:
-            with self._opener.open(request, timeout=self._timeout_seconds) as response:
-                body = response.read(_MAX_RESPONSE_BYTES + 1)
-                if len(body) > _MAX_RESPONSE_BYTES:
-                    raise AdapterContractError("Managed MCP returned an oversized response.")
-                returned_session_id = response.headers.get("Mcp-Session-Id") or session_id
-                content_type = response.headers.get("Content-Type", "")
-        except HTTPError as error:
-            logger.warning("mcp_http_error_%s", error.code)
-            if error.code in {401, 403}:
-                invalidate = getattr(self._api_key_provider, "invalidate", None)
-                if callable(invalidate):
-                    invalidate()
-            raise ExternalServiceError("CockroachDB Managed MCP") from error
-        except URLError as error:
-            logger.warning("mcp_network_error")
-            raise ExternalServiceError("CockroachDB Managed MCP") from error
-        if not body:
-            if allow_empty:
-                return None, returned_session_id
-            raise AdapterContractError("Managed MCP returned an empty response.")
-        return _decode_mcp_response(body, content_type), returned_session_id
+    async def _observe_response(self, response: httpx2.Response) -> None:
+        if response.status_code not in {401, 403}:
+            return
+        logger.warning("mcp_http_error_%s", response.status_code)
+        invalidate = getattr(self._api_key_provider, "invalidate", None)
+        if callable(invalidate):
+            invalidate()
 
 
-class _NoRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(self, request, fp, code, message, headers, new_url):
-        del request, fp, code, message, headers, new_url
-        return None
-
-
-def _decode_mcp_response(body: bytes, content_type: str) -> Mapping[str, Any]:
-    try:
-        text = body.decode("utf-8")
-        if "text/event-stream" in content_type.lower():
-            data_lines = [
-                line[5:].lstrip() for line in text.splitlines() if line.startswith("data:")
-            ]
-            text = "\n".join(data_lines)
-        value = json.loads(text)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise AdapterContractError("Managed MCP returned an invalid protocol response.") from error
-    if not isinstance(value, Mapping):
-        raise AdapterContractError("Managed MCP returned an invalid protocol response.")
-    return value
-
-
-def _json_rpc_result(response: Mapping[str, Any] | None) -> Mapping[str, Any]:
-    if response is None:
-        raise ExternalServiceError("CockroachDB Managed MCP")
-    if "error" in response:
-        error = response.get("error")
-        error_mapping = error if isinstance(error, Mapping) else {}
-        category, sqlstate = _mcp_tool_error_category(
-            {"structuredContent": error_mapping}
-        )
-        raw_code = error_mapping.get("code")
-        code = str(raw_code) if isinstance(raw_code, int) else "unknown"
-        logger.warning(
-            "mcp_rpc_error_%s_category_%s_sqlstate_%s",
-            code,
-            category,
-            sqlstate or "none",
-        )
-        raise ExternalServiceError("CockroachDB Managed MCP")
-    result = response.get("result")
-    if not isinstance(result, Mapping):
-        raise AdapterContractError("Managed MCP returned an invalid JSON-RPC result.")
-    return result
+def _sdk_mapping(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        mapped = model_dump(by_alias=True, exclude_none=True)
+        if isinstance(mapped, Mapping):
+            return mapped
+    raise AdapterContractError("Managed MCP returned an invalid SDK result.")
 
 
 def _mcp_result_value(result: Any) -> Any:
@@ -327,6 +238,25 @@ def _mcp_tool_error_category(result: Mapping[str, Any]) -> tuple[str, str | None
     )
     state = next((group for group in state_match.groups() if group), None) if state_match else None
     return category, state.upper() if state else None
+
+
+def _mcp_error_category(error: MCPError) -> tuple[str, str | None]:
+    result: dict[str, Any] = {
+        "content": [{"type": "text", "text": error.message}],
+    }
+    if isinstance(error.data, Mapping):
+        result["structuredContent"] = error.data
+    return _mcp_tool_error_category(result)
+
+
+def _log_mcp_error(error: MCPError) -> None:
+    category, sqlstate = _mcp_error_category(error)
+    logger.warning(
+        "mcp_rpc_error_%s_category_%s_sqlstate_%s",
+        error.code,
+        category,
+        sqlstate or "none",
+    )
 
 
 class ManagedMcpIncidentRepository:

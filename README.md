@@ -62,6 +62,10 @@ git diff --check
 ```
 
 `sam build` writes generated artifacts under the ignored `.aws-sam/` directory.
+On Windows, SAM's dependency resolver evaluates the official MCP SDK's Windows-only `pywin32`
+marker while selecting Lambda wheels. The runtime dependency closure is therefore fully pinned;
+run the build in PowerShell with `$env:PIP_NO_DEPS="1"` so SAM uses that lock without recursively
+selecting the Windows-only package. Docker/Linux builds do not require this workaround.
 
 ## Development deployment
 
