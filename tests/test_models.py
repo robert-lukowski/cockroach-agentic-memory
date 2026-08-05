@@ -69,6 +69,37 @@ def test_incident_request_rejects_unexpected_fields() -> None:
         IncidentCreateRequest.from_payload(payload)
 
 
+def test_incident_request_normalizes_source_id_into_metadata() -> None:
+    payload = valid_incident_payload()
+    payload["source_id"] = "servicenow:demo:00000000000000000000000000000001"
+
+    request = IncidentCreateRequest.from_payload(payload)
+
+    assert request.source_id == payload["source_id"]
+    assert request.metadata["source_id"] == payload["source_id"]
+    assert request.verify_only is False
+
+
+@pytest.mark.parametrize(
+    "payload_update",
+    [
+        {"source_id": "unsafe source id"},
+        {"verify_only": True},
+        {
+            "source_id": "servicenow:demo:00000000000000000000000000000001",
+            "metadata": {"source_id": "servicenow:demo:different"},
+        },
+        {"verify_only": "true"},
+    ],
+)
+def test_incident_request_rejects_invalid_idempotency_fields(payload_update) -> None:
+    payload = valid_incident_payload()
+    payload.update(payload_update)
+
+    with pytest.raises(ValidationError):
+        IncidentCreateRequest.from_payload(payload)
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [

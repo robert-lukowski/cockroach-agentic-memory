@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import Protocol
+from uuid import UUID
 
 from incident_memory.models import IncidentEvidence, StoredIncident
 
@@ -28,6 +29,9 @@ class IncidentRepository(Protocol):
 
     def save(self, incident: StoredIncident) -> None:
         """Persist one incident memory."""
+
+    def find_by_id(self, incident_id: UUID) -> StoredIncident | None:
+        """Return one incident by its application-owned identifier."""
 
     def find_similar(
         self,

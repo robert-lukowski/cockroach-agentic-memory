@@ -50,6 +50,61 @@ def test_save_maps_incident_to_insert_rows(stored_incident) -> None:
     assert str(stored_incident.incident_id) in arguments["query"]
     assert "'[0.25,0.25," in arguments["query"]
     assert "::VECTOR" in arguments["query"]
+    assert "ON CONFLICT (id) DO UPDATE" in arguments["query"]
+
+
+def test_find_by_id_uses_fixed_primary_key_query(stored_incident) -> None:
+    caller = FakeToolCaller(
+        {
+            "rows": [
+                {
+                    "incident_id": str(stored_incident.incident_id),
+                    "scope": stored_incident.scope,
+                    "service": stored_incident.service,
+                    "environment": stored_incident.environment,
+                    "title": stored_incident.title,
+                    "symptoms": stored_incident.symptoms,
+                    "root_cause": stored_incident.root_cause,
+                    "resolution": stored_incident.resolution,
+                    "tags": list(stored_incident.tags),
+                    "metadata": stored_incident.metadata,
+                    "created_at": stored_incident.created_at.isoformat(),
+                }
+            ]
+        }
+    )
+    repository = ManagedMcpIncidentRepository(tool_caller=caller, database="defaultdb")
+
+    result = repository.find_by_id(stored_incident.incident_id)
+
+    assert result == stored_incident.__class__(
+        incident_id=stored_incident.incident_id,
+        scope=stored_incident.scope,
+        service=stored_incident.service,
+        environment=stored_incident.environment,
+        title=stored_incident.title,
+        symptoms=stored_incident.symptoms,
+        root_cause=stored_incident.root_cause,
+        resolution=stored_incident.resolution,
+        tags=stored_incident.tags,
+        metadata=stored_incident.metadata,
+        embedding=(),
+        created_at=stored_incident.created_at,
+    )
+    name, arguments = caller.calls[0]
+    assert name == "select_query"
+    assert "WHERE id = '11111111-1111-4111-8111-111111111111'::UUID LIMIT 1" in arguments[
+        "query"
+    ]
+
+
+def test_find_by_id_returns_none_for_no_rows(stored_incident) -> None:
+    repository = ManagedMcpIncidentRepository(
+        tool_caller=FakeToolCaller({"rows": []}),
+        database="defaultdb",
+    )
+
+    assert repository.find_by_id(stored_incident.incident_id) is None
 
 
 def test_find_similar_builds_fixed_query_and_maps_rows(stored_incident) -> None:

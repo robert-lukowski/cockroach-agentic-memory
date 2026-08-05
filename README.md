@@ -38,6 +38,12 @@ generated `incident_id` and `created_at` timestamp. See
 Required fields are `scope`, `service`, `environment`, `title`, `symptoms`, `root_cause`, and
 `resolution`. Optional fields are `tags` and `metadata`; unknown fields are rejected.
 
+Source-aware clients may also provide `source_id`. The application derives a deterministic incident
+UUID, so repeating the same source cannot create another memory. Responses include `status` with
+`created`, `already_present`, or `updated`; callers that omit `source_id` retain the original `201`
+create behavior. `verify_only=true` requires `source_id` and checks for `already_present`, `absent`,
+or `different` without embedding or writing.
+
 ### `POST /investigations`
 
 Embeds the submitted symptoms, retrieves up to `top_k` incidents in the exact requested scope, and
@@ -82,6 +88,10 @@ On Windows, SAM's dependency resolver evaluates the official MCP SDK's Windows-o
 marker while selecting Lambda wheels. The runtime dependency closure is therefore fully pinned;
 run the build in PowerShell with `$env:PIP_NO_DEPS="1"` so SAM uses that lock without recursively
 selecting the Windows-only package. Docker/Linux builds do not require this workaround.
+
+The fictional demo dataset and its two future-safe loading paths are documented in
+[`docs/demo-data-loading.md`](docs/demo-data-loading.md). The ServiceNow loader uses the Table API;
+the memory synchronizer signs the existing `/incidents` route and never connects to CockroachDB.
 
 ## Development deployment
 

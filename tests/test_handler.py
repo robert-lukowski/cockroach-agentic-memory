@@ -85,6 +85,39 @@ def test_create_incident_route_returns_created_response() -> None:
 
     assert response["statusCode"] == 201
     assert body["incident_id"] == str(repository.saved[0].incident_id)
+    assert body["status"] == "created"
+
+
+def test_create_incident_route_returns_idempotent_status() -> None:
+    repository = MockMcpIncidentRepository()
+    handler = create_lambda_handler(
+        service=IncidentMemoryService(
+            bedrock=MockBedrockGateway(),
+            repository=repository,
+        ),
+        settings=Settings.from_environment({}),
+    )
+    payload = {
+        "scope": "servicenow-dev",
+        "service": "connect-outbound-orchestrator",
+        "environment": "development",
+        "title": "Outbound calls stall",
+        "symptoms": "Contacts remain pending.",
+        "root_cause": "Reserved concurrency was exhausted.",
+        "resolution": "Raised concurrency and added alarms.",
+        "source_id": "servicenow:demo:00000000000000000000000000000001",
+    }
+
+    created = handler(api_event("POST", "/incidents", payload), FakeContext())
+    repeated = handler(api_event("POST", "/incidents", payload), FakeContext())
+    payload["verify_only"] = True
+    verified = handler(api_event("POST", "/incidents", payload), FakeContext())
+
+    assert created["statusCode"] == 201
+    assert repeated["statusCode"] == 200
+    assert json.loads(repeated["body"])["status"] == "already_present"
+    assert verified["statusCode"] == 200
+    assert json.loads(verified["body"])["status"] == "already_present"
 
 
 def test_investigation_route_returns_repository_evidence(evidence) -> None:

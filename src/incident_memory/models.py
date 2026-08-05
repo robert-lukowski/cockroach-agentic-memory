@@ -22,7 +22,7 @@ _INCIDENT_REQUIRED_FIELDS = {
     "root_cause",
     "resolution",
 }
-_INCIDENT_OPTIONAL_FIELDS = {"tags", "metadata"}
+_INCIDENT_OPTIONAL_FIELDS = {"tags", "metadata", "source_id", "verify_only"}
 _INVESTIGATION_REQUIRED_FIELDS = {"scope", "symptoms"}
 _INVESTIGATION_OPTIONAL_FIELDS = {"service", "environment", "top_k"}
 _SERVICENOW_REQUIRED_FIELDS = {
@@ -40,6 +40,7 @@ _SERVICENOW_REQUIRED_FIELDS = {
     "opened_at",
 }
 _SERVICENOW_SYS_ID = re.compile(r"[0-9a-fA-F]{32}")
+_SOURCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9:._/-]{0,255}")
 
 
 def _require_object(payload: object) -> dict[str, Any]:
@@ -150,6 +151,16 @@ def _metadata(payload: dict[str, Any]) -> dict[str, Any]:
     return dict(value)
 
 
+def _optional_boolean(payload: dict[str, Any], field: str, *, default: bool = False) -> bool:
+    value = payload.get(field, default)
+    if not isinstance(value, bool):
+        raise ValidationError(
+            f"{field} must be a boolean.",
+            details={"field": field},
+        )
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class IncidentCreateRequest:
     """Validated payload used to create an incident memory."""
@@ -163,6 +174,8 @@ class IncidentCreateRequest:
     resolution: str
     tags: tuple[str, ...]
     metadata: dict[str, Any]
+    source_id: str | None
+    verify_only: bool
 
     @classmethod
     def from_payload(cls, raw_payload: object) -> Self:
@@ -172,6 +185,26 @@ class IncidentCreateRequest:
             required=_INCIDENT_REQUIRED_FIELDS,
             optional=_INCIDENT_OPTIONAL_FIELDS,
         )
+        metadata = _metadata(payload)
+        source_id = _optional_string(payload, "source_id", maximum=256)
+        verify_only = _optional_boolean(payload, "verify_only")
+        if verify_only and source_id is None:
+            raise ValidationError("source_id is required when verify_only is true.")
+        if source_id is not None:
+            if _SOURCE_ID.fullmatch(source_id) is None:
+                raise ValidationError(
+                    "source_id contains unsupported characters.",
+                    details={"field": "source_id"},
+                )
+            metadata_source_id = metadata.get("source_id")
+            if metadata_source_id is not None and metadata_source_id != source_id:
+                raise ValidationError(
+                    "metadata.source_id must match source_id.",
+                    details={"field": "metadata.source_id"},
+                )
+            metadata["source_id"] = source_id
+            if len(json.dumps(metadata, separators=(",", ":"), ensure_ascii=False)) > 8_192:
+                raise ValidationError("metadata must serialize to at most 8192 characters.")
         return cls(
             scope=_required_string(payload, "scope", maximum=64),
             service=_required_string(payload, "service", maximum=128),
@@ -181,7 +214,9 @@ class IncidentCreateRequest:
             root_cause=_required_string(payload, "root_cause", maximum=8_000),
             resolution=_required_string(payload, "resolution", maximum=8_000),
             tags=_tags(payload),
-            metadata=_metadata(payload),
+            metadata=metadata,
+            source_id=source_id,
+            verify_only=verify_only,
         )
 
     def embedding_text(self) -> str:
@@ -348,13 +383,17 @@ class IncidentEvidence:
 @dataclass(frozen=True, slots=True)
 class IncidentCreateResponse:
     incident_id: UUID
-    created_at: datetime
+    created_at: datetime | None
+    status: str = "created"
 
     def as_dict(self) -> dict[str, str]:
-        return {
+        payload = {
             "incident_id": str(self.incident_id),
-            "created_at": self.created_at.isoformat(),
+            "status": self.status,
         }
+        if self.created_at is not None:
+            payload["created_at"] = self.created_at.isoformat()
+        return payload
 
 
 @dataclass(frozen=True, slots=True)

@@ -96,7 +96,7 @@ def create_lambda_handler(
             if (method, path) == ("POST", "/incidents"):
                 request = IncidentCreateRequest.from_payload(_json_body(event))
                 result = service.create_incident(request)
-                return _response(201, result.as_dict())
+                return _response(201 if result.status == "created" else 200, result.as_dict())
             if (method, path) == ("POST", "/investigations"):
                 request = InvestigationRequest.from_payload(_json_body(event))
                 result = service.investigate(request)

@@ -83,6 +83,7 @@ There is no model-directed tool loop and no generic data-access method in the ap
 `IncidentRepository` exposes only:
 
 - `save(incident)`
+- `find_by_id(incident_id)` for application-owned source idempotency
 - `find_similar(scope, embedding, limit, service, environment)`
 
 The live adapters are composed only when `APP_MODE=live` and all required settings validate.
@@ -94,6 +95,11 @@ Each repository operation initializes, lists tools, and calls its allowlisted to
 uninterrupted Streamable HTTP `ClientSession`; the SDK owns JSON-RPC framing and session-ID
 handling. The query tool receives SQL created inside the repository adapter from a fixed query
 shape. Requests, prompts, and model output cannot provide SQL or an MCP tool name.
+
+Source-aware ingestion converts a validated `source_id` to a deterministic UUID. The service uses a
+fixed primary-key lookup, avoids embedding and writing when stored fields already match, and uses an
+application-owned upsert when reviewed fields change. `verify_only` performs only the lookup and
+comparison. Callers never supply the UUID or repository query.
 
 ## Data model and vector retrieval
 

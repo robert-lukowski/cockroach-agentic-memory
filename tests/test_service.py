@@ -47,9 +47,94 @@ def test_create_incident_embeds_and_saves() -> None:
 
     assert response.incident_id == fixed_id
     assert response.created_at == fixed_time
+    assert response.status == "created"
     assert len(repository.saved) == 1
     assert repository.saved[0].embedding == (0.25,) * EMBEDDING_DIMENSIONS
     assert bedrock.embedding_inputs[0].startswith("Service: payments-api")
+
+
+def test_source_id_create_is_deterministic_and_repeated_call_is_idempotent() -> None:
+    payload = {
+        "scope": "servicenow-dev",
+        "service": "connect-outbound-orchestrator",
+        "environment": "development",
+        "title": "Outbound calls stall",
+        "symptoms": "Contacts remain pending.",
+        "root_cause": "Reserved concurrency was exhausted.",
+        "resolution": "Raised concurrency and added alarms.",
+        "source_id": "servicenow:demo:00000000000000000000000000000001",
+    }
+    request = IncidentCreateRequest.from_payload(payload)
+    bedrock = MockBedrockGateway()
+    repository = MockMcpIncidentRepository()
+    service = IncidentMemoryService(bedrock=bedrock, repository=repository)
+
+    created = service.create_incident(request)
+    repeated = service.create_incident(request)
+
+    assert created.status == "created"
+    assert repeated.status == "already_present"
+    assert repeated.incident_id == created.incident_id
+    assert len(repository.saved) == 1
+    assert len(bedrock.embedding_inputs) == 1
+
+
+def test_source_id_updates_same_memory_when_relevant_fields_change() -> None:
+    original = IncidentCreateRequest.from_payload(
+        {
+            "scope": "servicenow-dev",
+            "service": "connect-outbound-orchestrator",
+            "environment": "development",
+            "title": "Outbound calls stall",
+            "symptoms": "Contacts remain pending.",
+            "root_cause": "Reserved concurrency was exhausted.",
+            "resolution": "Raised concurrency and added alarms.",
+            "source_id": "servicenow:demo:00000000000000000000000000000002",
+        }
+    )
+    changed = replace(original, resolution="Raised concurrency and added a release check.")
+    repository = MockMcpIncidentRepository()
+    bedrock = MockBedrockGateway()
+    service = IncidentMemoryService(bedrock=bedrock, repository=repository)
+
+    created = service.create_incident(original)
+    updated = service.create_incident(changed)
+
+    assert updated.status == "updated"
+    assert updated.incident_id == created.incident_id
+    assert updated.created_at == created.created_at
+    assert len(repository.saved) == 1
+    assert repository.saved[0].resolution == changed.resolution
+    assert len(bedrock.embedding_inputs) == 2
+
+
+def test_verify_only_reports_absent_and_present_without_embedding_or_write() -> None:
+    payload = {
+        "scope": "servicenow-dev",
+        "service": "connect-outbound-orchestrator",
+        "environment": "development",
+        "title": "Outbound calls stall",
+        "symptoms": "Contacts remain pending.",
+        "root_cause": "Reserved concurrency was exhausted.",
+        "resolution": "Raised concurrency and added alarms.",
+        "source_id": "servicenow:demo:00000000000000000000000000000003",
+    }
+    request = IncidentCreateRequest.from_payload(payload)
+    verify = replace(request, verify_only=True)
+    repository = MockMcpIncidentRepository()
+    bedrock = MockBedrockGateway()
+    service = IncidentMemoryService(bedrock=bedrock, repository=repository)
+
+    absent = service.create_incident(verify)
+    created = service.create_incident(request)
+    present = service.create_incident(verify)
+
+    assert absent.status == "absent"
+    assert absent.created_at is None
+    assert created.status == "created"
+    assert present.status == "already_present"
+    assert len(repository.saved) == 1
+    assert len(bedrock.embedding_inputs) == 1
 
 
 def test_investigation_retrieves_before_generation(evidence) -> None:

@@ -272,12 +272,35 @@ class ManagedMcpIncidentRepository:
             f"{_sql_literal(incident.symptoms)}, {_sql_literal(incident.root_cause)}, "
             f"{_sql_literal(incident.resolution)}, {_sql_literal(tags)}::JSONB, "
             f"{_sql_literal(metadata)}::JSONB, {_sql_literal(vector)}::VECTOR, "
-            f"{_sql_literal(incident.created_at.isoformat())}::TIMESTAMPTZ)"
+            f"{_sql_literal(incident.created_at.isoformat())}::TIMESTAMPTZ) "
+            "ON CONFLICT (id) DO UPDATE SET "
+            "scope = excluded.scope, service = excluded.service, "
+            "environment = excluded.environment, title = excluded.title, "
+            "symptoms = excluded.symptoms, root_cause = excluded.root_cause, "
+            "resolution = excluded.resolution, tags = excluded.tags, "
+            "metadata = excluded.metadata, embedding = excluded.embedding"
         )
         self._tool_caller.call_tool(
             "insert_rows",
             {"database": self._database, "query": query},
         )
+
+    def find_by_id(self, incident_id: UUID) -> StoredIncident | None:
+        query = (
+            "SELECT id::STRING AS incident_id, scope, service, environment, title, symptoms, "
+            "root_cause, resolution, tags, metadata, created_at::STRING AS created_at "
+            f"FROM {_TABLE_NAME} WHERE id = {_sql_literal(str(incident_id))}::UUID LIMIT 1"
+        )
+        result = self._tool_caller.call_tool(
+            "select_query",
+            {"database": self._database, "query": query},
+        )
+        rows = _extract_rows(result)
+        if not rows:
+            return None
+        if len(rows) != 1:
+            raise AdapterContractError("Managed MCP returned duplicate incident identifiers.")
+        return _stored_incident_from_row(rows[0])
 
     def find_similar(
         self,
@@ -352,10 +375,10 @@ def _json_tags(value: Any) -> tuple[str, ...]:
     return tuple(parsed)
 
 
-def _evidence_from_row(row: Mapping[str, Any]) -> IncidentEvidence:
+def _stored_incident_from_row(row: Mapping[str, Any]) -> StoredIncident:
     try:
         created_at = datetime.fromisoformat(str(row["created_at"]).replace("Z", "+00:00"))
-        incident = StoredIncident(
+        return StoredIncident(
             incident_id=UUID(str(row["incident_id"])),
             scope=str(row["scope"]),
             service=str(row["service"]),
@@ -369,7 +392,13 @@ def _evidence_from_row(row: Mapping[str, Any]) -> IncidentEvidence:
             embedding=(),
             created_at=created_at,
         )
-        similarity = float(row["similarity"])
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise AdapterContractError("Managed MCP returned an invalid incident row.") from error
-    return IncidentEvidence(incident=incident, similarity=similarity)
+
+
+def _evidence_from_row(row: Mapping[str, Any]) -> IncidentEvidence:
+    try:
+        similarity = float(row["similarity"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise AdapterContractError("Managed MCP returned an invalid incident row.") from error
+    return IncidentEvidence(incident=_stored_incident_from_row(row), similarity=similarity)

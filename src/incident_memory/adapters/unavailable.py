@@ -1,6 +1,7 @@
 """Fail-closed adapters used until live integrations are approved."""
 
 from collections.abc import Sequence
+from uuid import UUID
 
 from incident_memory.errors import DependencyUnavailableError
 from incident_memory.models import IncidentEvidence, StoredIncident
@@ -28,6 +29,10 @@ class UnavailableIncidentRepository:
 
     def save(self, incident: StoredIncident) -> None:
         del incident
+        raise DependencyUnavailableError("incident repository")
+
+    def find_by_id(self, incident_id: UUID) -> StoredIncident | None:
+        del incident_id
         raise DependencyUnavailableError("incident repository")
 
     def find_similar(

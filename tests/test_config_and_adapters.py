@@ -34,6 +34,8 @@ def test_unavailable_repository_fails_closed(stored_incident) -> None:
     with pytest.raises(DependencyUnavailableError, match="repository"):
         adapter.save(stored_incident)
     with pytest.raises(DependencyUnavailableError, match="repository"):
+        adapter.find_by_id(stored_incident.incident_id)
+    with pytest.raises(DependencyUnavailableError, match="repository"):
         adapter.find_similar(
             scope="hackathon-demo",
             embedding=stored_incident.embedding,

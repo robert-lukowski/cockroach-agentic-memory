@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from uuid import UUID
 
 from incident_memory.models import EMBEDDING_DIMENSIONS, IncidentEvidence, StoredIncident
 
@@ -40,7 +41,12 @@ class MockMcpIncidentRepository:
     search_calls: list[dict[str, object]] = field(default_factory=list)
 
     def save(self, incident: StoredIncident) -> None:
+        self.saved = [item for item in self.saved if item.incident_id != incident.incident_id]
         self.saved.append(incident)
+
+    def find_by_id(self, incident_id: UUID) -> StoredIncident | None:
+        matches = [item for item in self.saved if item.incident_id == incident_id]
+        return matches[0] if matches else None
 
     def find_similar(
         self,
