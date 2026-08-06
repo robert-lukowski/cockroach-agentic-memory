@@ -25,6 +25,10 @@ STATE_MAPPING = {
     "Resolved": "6",
     "Closed": "7",
 }
+PREFERRED_CLOSE_CODE_LABELS = (
+    "Solved (Permanently)",
+    "Solution provided",
+)
 SYNTHETIC_MARKER = "[AGENTIC_MEMORY_SYNTHETIC_DEMO]"
 RESOLUTION_START = "[AGENTIC_MEMORY_RESOLVED_DETAILS]"
 RESOLUTION_END = "[/AGENTIC_MEMORY_RESOLVED_DETAILS]"
@@ -295,6 +299,37 @@ def validate_state_mapping(client: ServiceNowClient) -> None:
         raise ConfigurationError(f"PDI incident state mapping mismatch for: {labels}.")
 
 
+def select_demo_close_code(client: ServiceNowClient) -> tuple[str, str]:
+    choices = client.list_records(
+        "sys_choice",
+        query="name=incident^element=close_code^inactive=false",
+        fields=("label", "value"),
+        limit=100,
+    )
+    candidates = sorted(
+        (
+            (label, value)
+            for choice in choices
+            if isinstance((label := choice.get("label")), str)
+            and label
+            and isinstance((value := choice.get("value")), str)
+            and value
+        ),
+        key=lambda item: (item[0].casefold(), item[1]),
+    )
+    by_label = {label.casefold(): (label, value) for label, value in candidates}
+    for preferred in PREFERRED_CLOSE_CODE_LABELS:
+        if selected := by_label.get(preferred.casefold()):
+            return selected
+    for label, value in candidates:
+        normalized = label.casefold()
+        if any(keyword in normalized for keyword in ("solution", "solved", "resolved")):
+            return label, value
+    if candidates:
+        return candidates[0]
+    raise ConfigurationError("The PDI has no active incident.close_code choices.")
+
+
 def _reference_id(
     client: ServiceNowClient,
     *,
@@ -326,6 +361,7 @@ def build_incident_payload(
     *,
     assignment_group_id: str | None,
     cmdb_ci_id: str | None,
+    close_code_value: str | None = None,
 ) -> dict[str, Any]:
     description = str(record["description"]).replace(SYNTHETIC_MARKER, "").strip()
     payload: dict[str, Any] = {
@@ -348,7 +384,7 @@ def build_incident_payload(
         payload.update(
             {
                 "resolved_at": _snow_timestamp(str(record["resolved_at"])),
-                "close_code": record["close_code"],
+                "close_code": close_code_value or record["close_code"],
                 "close_notes": (
                     f"{close_notes}\n\n{RESOLUTION_START}\n"
                     f"Root cause: {record['root_cause']}\n"
@@ -379,6 +415,7 @@ def seed_records(
     dry_run: bool = False,
     verify_only: bool = False,
     skipped: int = 0,
+    close_code_value: str | None = None,
     warning: Callable[[str], None] = lambda message: print(message, file=sys.stderr),
 ) -> SeedSummary:
     summary = SeedSummary(selected=len(records), skipped=skipped)
@@ -424,6 +461,7 @@ def seed_records(
                 record,
                 assignment_group_id=group_id,
                 cmdb_ci_id=ci_id,
+                close_code_value=close_code_value,
             )
             matches = client.list_records(
                 "incident",
@@ -509,17 +547,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             password=password,
         )
         validate_state_mapping(client)
+        selected_close_code = (
+            select_demo_close_code(client)
+            if any(record.get("active") is False for record in selected)
+            else None
+        )
         summary = seed_records(
             selected,
             client=client,
             dry_run=args.dry_run,
             verify_only=args.verify_only,
             skipped=skipped,
+            close_code_value=(selected_close_code[1] if selected_close_code else None),
         )
     except (ConfigurationError, ServiceNowError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
-    print(json.dumps(asdict(summary), sort_keys=True))
+    output = asdict(summary)
+    if selected_close_code:
+        output["selected_close_code_label"] = selected_close_code[0]
+        output["selected_close_code_value"] = selected_close_code[1]
+    print(json.dumps(output, sort_keys=True))
     return 1 if summary.failed else 0
 
 

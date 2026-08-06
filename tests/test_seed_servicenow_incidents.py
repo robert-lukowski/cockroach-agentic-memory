@@ -19,6 +19,7 @@ from scripts.seed_servicenow_incidents import (
     build_incident_payload,
     configuration_from_environment,
     seed_records,
+    select_demo_close_code,
     select_records,
     validate_state_mapping,
 )
@@ -36,6 +37,10 @@ class FakeServiceNowClient:
         self.created: list[dict[str, Any]] = []
         self.updated: list[tuple[str, dict[str, Any]]] = []
         self.state_mapping = dict(STATE_MAPPING)
+        self.close_code_choices = [
+            {"label": "Known error", "value": "known_error"},
+            {"label": "Solution provided", "value": "solution_provided"},
+        ]
 
     def list_records(self, table, *, query, fields, limit=100):
         del fields, limit
@@ -43,6 +48,8 @@ class FakeServiceNowClient:
             assert query == "name=task^element=state"
             return [{"name": "task", "element": "state", "internal_type": "integer"}]
         if table == "sys_choice":
+            if "element=close_code" in query:
+                return deepcopy(self.close_code_choices)
             return [
                 {"label": label, "value": value}
                 for label, value in self.state_mapping.items()
@@ -115,6 +122,31 @@ def test_state_mapping_is_validated_against_pdi_choices() -> None:
 
     with pytest.raises(ConfigurationError, match="Resolved"):
         validate_state_mapping(client)
+
+
+def test_demo_close_code_uses_valid_preferred_pdi_choice() -> None:
+    client = FakeServiceNowClient()
+
+    assert select_demo_close_code(client) == (
+        "Solution provided",
+        "solution_provided",
+    )
+
+
+def test_resolved_payload_uses_pdi_close_code_without_changing_resolution() -> None:
+    record = deepcopy(DATASET[0])
+
+    payload = build_incident_payload(
+        record,
+        assignment_group_id=None,
+        cmdb_ci_id=None,
+        close_code_value="solution_provided",
+    )
+
+    assert payload["close_code"] == "solution_provided"
+    assert record["root_cause"] in payload["close_notes"]
+    assert record["resolution"] in payload["close_notes"]
+    assert record["close_notes"] in payload["close_notes"]
 
 
 def test_create_update_and_unchanged_behavior() -> None:
