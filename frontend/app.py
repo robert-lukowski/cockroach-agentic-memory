@@ -53,7 +53,7 @@ def _load_scenario() -> None:
         "incident_title": "",
         "incident_symptoms": "",
         "incident_service": "",
-        "incident_environment": "development",
+        "incident_environment": "",
     }
     if scenario is not None:
         values.update(
@@ -85,7 +85,7 @@ def main() -> None:
         scenario.key: scenario.label for scenario in DEMO_SCENARIOS
     }
     st.selectbox(
-        "Demo scenario",
+        "Load sample incident",
         options=list(scenario_options),
         format_func=scenario_options.get,
         key="scenario_key",
