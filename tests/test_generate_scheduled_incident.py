@@ -92,7 +92,8 @@ def test_oidc_template_is_repository_branch_and_secret_scoped() -> None:
     assert trust[0]["Condition"]["StringEquals"] == {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
         "token.actions.githubusercontent.com:sub": (
-            "repo:robert-lukowski/cockroach-agentic-memory:ref:refs/heads/main"
+            "repo:robert-lukowski@207513888/"
+            "cockroach-agentic-memory@1322917399:ref:refs/heads/main"
         ),
     }
     assert permissions == [

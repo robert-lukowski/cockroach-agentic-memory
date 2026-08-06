@@ -65,7 +65,8 @@ Run a deterministic local preview without AWS or ServiceNow access:
 Read-only inspection on 2026-08-06 found no GitHub OIDC provider, GitHub-trusted IAM role, or
 ServiceNow-named secret in the development account. `infrastructure/github-actions-oidc.yaml`
 therefore prepares, but does not deploy, one provider and one role. The role is restricted to the
-`main` branch of `robert-lukowski/cockroach-agentic-memory`.
+`main` branch of `robert-lukowski/cockroach-agentic-memory`. Because this repository uses GitHub's
+immutable OIDC subject format, the trust condition also pins the owner and repository numeric IDs.
 
 The resulting trust policy is exactly:
 
@@ -81,7 +82,7 @@ The resulting trust policy is exactly:
     "Condition": {
       "StringEquals": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:robert-lukowski/cockroach-agentic-memory:ref:refs/heads/main"
+        "token.actions.githubusercontent.com:sub": "repo:robert-lukowski@207513888/cockroach-agentic-memory@1322917399:ref:refs/heads/main"
       }
     }
   }]

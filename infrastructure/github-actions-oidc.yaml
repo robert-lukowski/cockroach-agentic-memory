@@ -30,7 +30,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: repo:robert-lukowski/cockroach-agentic-memory:ref:refs/heads/main
+                token.actions.githubusercontent.com:sub: repo:robert-lukowski@207513888/cockroach-agentic-memory@1322917399:ref:refs/heads/main
       Policies:
         - PolicyName: read-servicenow-demo-secret
           PolicyDocument:
