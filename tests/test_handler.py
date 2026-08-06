@@ -146,6 +146,23 @@ def test_investigation_route_returns_repository_evidence(evidence) -> None:
     assert response["statusCode"] == 200
     assert body["recommendation"] == "Inspect connection saturation."
     assert body["supporting_incident_ids"] == [str(evidence.incident.incident_id)]
+    assert body["supporting_incidents"] == [
+        {
+            "incident_id": str(evidence.incident.incident_id),
+            "incident_number": "INC9000016",
+            "service": evidence.incident.service,
+            "similarity": evidence.similarity,
+            "root_cause": evidence.incident.root_cause,
+            "resolution": evidence.incident.resolution,
+        }
+    ]
+    assert body["evidence"] == [
+        {
+            "incident_id": str(evidence.incident.incident_id),
+            "title": evidence.incident.title,
+            "similarity": evidence.similarity,
+        }
+    ]
 
 
 def test_invalid_json_returns_safe_validation_error() -> None:
@@ -253,6 +270,16 @@ def test_servicenow_analyze_reuses_investigation_without_storing(evidence) -> No
     assert body == {
         "recommendation": "Inspect connection saturation.",
         "supporting_incident_ids": [str(evidence.incident.incident_id)],
+        "supporting_incidents": [
+            {
+                "incident_id": str(evidence.incident.incident_id),
+                "incident_number": "INC9000016",
+                "service": evidence.incident.service,
+                "similarity": evidence.similarity,
+                "root_cause": evidence.incident.root_cause,
+                "resolution": evidence.incident.resolution,
+            }
+        ],
     }
     assert repository.saved == []
     assert repository.search_calls[0]["scope"] == "hackathon-demo"

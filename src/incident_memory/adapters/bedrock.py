@@ -13,9 +13,12 @@ from incident_memory.errors import AdapterContractError, ExternalServiceError
 from incident_memory.models import EMBEDDING_DIMENSIONS, IncidentEvidence
 
 _SYSTEM_PROMPT = """You are an incident-response assistant. Use only the supplied prior-incident
-evidence. Clearly distinguish evidence from inference. Recommend concrete diagnostic and remediation
-steps. Do not invent incident IDs, causes, commands, or observations. If evidence is insufficient,
-say so. Mention the relevant supporting incident IDs in the recommendation."""
+evidence and clearly distinguish evidence from inference. Return concise plain text with a Diagnosis
+heading followed by a short diagnosis, then a Recommended actions heading followed by a numbered
+list of concrete diagnostic and remediation steps. Do not use Markdown tables, pipe-delimited rows,
+HTML, or other wide formatting. Do not list or repeat incident IDs or incident numbers because the
+application returns supporting evidence separately. Do not invent causes, commands, or observations.
+If evidence is insufficient, say so."""
 
 
 class BedrockRuntimeGateway:

@@ -20,7 +20,7 @@ def stored_incident() -> StoredIncident:
         root_cause="Lambda concurrency exceeded the configured connection pool.",
         resolution="Bound concurrency and increased the pool with saturation alerts.",
         tags=("database", "latency"),
-        metadata={"severity": "SEV-2"},
+        metadata={"severity": "SEV-2", "incident_number": "INC9000016"},
         embedding=(0.25,) * EMBEDDING_DIMENSIONS,
         created_at=datetime(2026, 8, 4, 10, 30, tzinfo=UTC),
     )

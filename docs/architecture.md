@@ -54,8 +54,10 @@ Gateway API key because it is called by the scoped application REST Message.
 4. CockroachDB orders results by cosine distance using the distributed vector index.
 5. The service rejects malformed, non-finite, over-limit, or cross-scope repository evidence.
 6. Bedrock receives only the current symptoms and the validated evidence.
-7. The model produces recommendation text; supporting IDs and similarity values are copied from the
-   repository evidence by application code.
+7. The model produces concise diagnosis and numbered-action text without evidence tables or
+   incident identifier lists.
+8. Application code copies supporting IDs and a fixed evidence projection from repository results;
+   the model cannot add, remove, or alter supporting records.
 
 There is no model-directed tool loop and no generic data-access method in the application layer.
 
@@ -69,9 +71,15 @@ There is no model-directed tool loop and no generic data-access method in the ap
    deployment-owned `SERVICENOW_MEMORY_SCOPE` and fixed `top_k=5`.
 4. The existing investigation service performs embedding, scoped retrieval, evidence validation,
    and grounded recommendation generation without duplicated adapter logic.
-5. The response contains only `recommendation` and repository-derived
-   `supporting_incident_ids`, matching the existing ServiceNow response parser.
+5. The response preserves `recommendation` and repository-derived `supporting_incident_ids`, then
+   adds `supporting_incidents` with only the incident UUID, readable ServiceNow number, service,
+   similarity, root cause, and resolution.
 6. The active, unresolved ServiceNow record is not sent through `create_incident` and is not stored.
+
+The readable number is taken from `metadata.incident_number`; invalid or absent values fall back to
+the incident UUID, and an absent service becomes `unknown`. Clients should render the readable
+number and use the UUID only as a technical fallback. Incomplete optional metadata cannot fail the
+whole analysis response, and full metadata is never exposed.
 
 ## Ports and adapters
 

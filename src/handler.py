@@ -108,15 +108,7 @@ def create_lambda_handler(
                 result = service.investigate(
                     servicenow_request.as_investigation(scope=settings.servicenow_memory_scope)
                 )
-                return _response(
-                    200,
-                    {
-                        "recommendation": result.recommendation,
-                        "supporting_incident_ids": [
-                            str(item.incident.incident_id) for item in result.evidence
-                        ],
-                    },
-                )
+                return _response(200, result.as_servicenow_dict())
             return _response(
                 404,
                 {

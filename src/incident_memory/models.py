@@ -40,6 +40,7 @@ _SERVICENOW_REQUIRED_FIELDS = {
     "opened_at",
 }
 _SERVICENOW_SYS_ID = re.compile(r"[0-9a-fA-F]{32}")
+_SERVICENOW_INCIDENT_NUMBER = re.compile(r"INC[0-9]{7,37}")
 _SOURCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9:._/-]{0,255}")
 
 
@@ -369,7 +370,6 @@ class IncidentEvidence:
 
     def generation_context(self) -> dict[str, Any]:
         return {
-            "incident_id": str(self.incident.incident_id),
             "service": self.incident.service,
             "environment": self.incident.environment,
             "title": self.incident.title,
@@ -377,6 +377,30 @@ class IncidentEvidence:
             "root_cause": self.incident.root_cause,
             "resolution": self.incident.resolution,
             "similarity": self.similarity,
+        }
+
+    def supporting_incident(self) -> dict[str, str | float]:
+        """Return the fixed, public evidence projection used by API responses."""
+        incident_id = str(self.incident.incident_id)
+        raw_number = self.incident.metadata.get("incident_number")
+        incident_number = (
+            raw_number.strip()
+            if isinstance(raw_number, str)
+            and _SERVICENOW_INCIDENT_NUMBER.fullmatch(raw_number.strip())
+            else incident_id
+        )
+        service = (
+            self.incident.service.strip()
+            if isinstance(self.incident.service, str) and self.incident.service.strip()
+            else "unknown"
+        )
+        return {
+            "incident_id": incident_id,
+            "incident_number": incident_number,
+            "service": service,
+            "similarity": self.similarity,
+            "root_cause": self.incident.root_cause,
+            "resolution": self.incident.resolution,
         }
 
 
@@ -404,9 +428,8 @@ class InvestigationResponse:
     def as_dict(self) -> dict[str, Any]:
         return {
             "recommendation": self.recommendation,
-            "supporting_incident_ids": [
-                str(item.incident.incident_id) for item in self.evidence
-            ],
+            "supporting_incident_ids": self.supporting_incident_ids(),
+            "supporting_incidents": self.supporting_incidents(),
             "evidence": [
                 {
                     "incident_id": str(item.incident.incident_id),
@@ -416,3 +439,17 @@ class InvestigationResponse:
                 for item in self.evidence
             ],
         }
+
+    def as_servicenow_dict(self) -> dict[str, Any]:
+        """Return the backward-compatible ServiceNow integration projection."""
+        return {
+            "recommendation": self.recommendation,
+            "supporting_incident_ids": self.supporting_incident_ids(),
+            "supporting_incidents": self.supporting_incidents(),
+        }
+
+    def supporting_incident_ids(self) -> list[str]:
+        return [str(item.incident.incident_id) for item in self.evidence]
+
+    def supporting_incidents(self) -> list[dict[str, str | float]]:
+        return [item.supporting_incident() for item in self.evidence]

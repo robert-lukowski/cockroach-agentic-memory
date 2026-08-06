@@ -1,13 +1,26 @@
-"""Unit tests for request validation."""
+"""Unit tests for request validation and response projection."""
+
+from dataclasses import replace
 
 import pytest
 
 from incident_memory.errors import ValidationError
 from incident_memory.models import (
     IncidentCreateRequest,
+    IncidentEvidence,
     InvestigationRequest,
+    InvestigationResponse,
     ServiceNowAnalyzeRequest,
 )
+
+SUPPORTING_FIELDS = {
+    "incident_id",
+    "incident_number",
+    "service",
+    "similarity",
+    "root_cause",
+    "resolution",
+}
 
 
 def valid_incident_payload() -> dict[str, object]:
@@ -191,3 +204,43 @@ def test_servicenow_request_rejects_unknown_fields() -> None:
 
     with pytest.raises(ValidationError, match="unsupported"):
         ServiceNowAnalyzeRequest.from_payload(payload)
+
+
+def test_investigation_response_projects_only_allowed_supporting_fields(evidence) -> None:
+    response = InvestigationResponse(
+        recommendation="Inspect connection saturation.",
+        evidence=(evidence,),
+    ).as_dict()
+
+    assert response["supporting_incident_ids"] == [str(evidence.incident.incident_id)]
+    supporting = response["supporting_incidents"][0]
+    assert set(supporting) == SUPPORTING_FIELDS
+    assert supporting["incident_number"] == "INC9000016"
+    assert supporting["service"] == evidence.incident.service
+    assert supporting["similarity"] == evidence.similarity
+    assert supporting["root_cause"] == evidence.incident.root_cause
+    assert supporting["resolution"] == evidence.incident.resolution
+    assert "metadata" not in supporting
+    assert "symptoms" not in supporting
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {},
+        {"incident_number": None},
+        {"incident_number": "not-an-incident"},
+        {"incident_number": 9000016},
+    ],
+)
+def test_supporting_incident_number_falls_back_to_id(evidence, metadata) -> None:
+    incomplete = IncidentEvidence(
+        incident=replace(evidence.incident, metadata=metadata, service=""),
+        similarity=evidence.similarity,
+    )
+
+    supporting = incomplete.supporting_incident()
+
+    assert supporting["incident_number"] == str(evidence.incident.incident_id)
+    assert supporting["service"] == "unknown"
+    assert set(supporting) == SUPPORTING_FIELDS

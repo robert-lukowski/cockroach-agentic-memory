@@ -77,8 +77,12 @@ def test_generates_recommendation_from_supplied_evidence(evidence) -> None:
     assert result == "Use the prior remediation."
     call = client.converse_calls[0]
     prompt = call["messages"][0]["content"][0]["text"]
-    assert str(evidence.incident.incident_id) in prompt
+    system_prompt = call["system"][0]["text"]
+    assert str(evidence.incident.incident_id) not in prompt
     assert "Database waits are rising." in prompt
+    assert "Do not use Markdown tables" in system_prompt
+    assert "numbered" in system_prompt
+    assert "Do not list or repeat incident IDs" in system_prompt
     assert call["inferenceConfig"]["temperature"] == 0.1
 
 

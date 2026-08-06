@@ -44,15 +44,36 @@ Status `200`:
 
 ```json
 {
-  "recommendation": "Review the matching incident evidence and inspect connection saturation.",
-  "supporting_incident_ids": ["11111111-1111-4111-8111-111111111111"]
+  "recommendation": "Diagnosis:\nThe symptoms match a prior capacity issue.\n\nRecommended actions:\n1. Check concurrency saturation.",
+  "supporting_incident_ids": ["11111111-1111-4111-8111-111111111111"],
+  "supporting_incidents": [
+    {
+      "incident_id": "11111111-1111-4111-8111-111111111111",
+      "incident_number": "INC9000016",
+      "service": "connect-outbound-orchestrator",
+      "similarity": 0.82,
+      "root_cause": "Concurrency capacity was exhausted.",
+      "resolution": "Capacity was raised and saturation alarms were added."
+    }
+  ]
 }
 ```
 
 `recommendation` is non-empty model output grounded in retrieved evidence. Incident IDs are copied
-from validated repository results and cannot be supplied by the model. The response intentionally
-omits the backend `evidence` detail because the existing ServiceNow parser needs only the two fields
-above.
+from validated repository results and cannot be supplied by the model. The legacy
+`supporting_incident_ids` field is unchanged. The additive `supporting_incidents` objects contain
+only `incident_id`, `incident_number`, `service`, `similarity`, `root_cause`, and `resolution`; full
+metadata, descriptions, caller data, comments, and work notes are never projected.
+
+`incident_number` comes from validated `metadata.incident_number`. If it is missing or does not
+match a ServiceNow `INC` number, application code substitutes `incident_id` without failing the
+response. A missing service becomes `unknown`. ServiceNow clients should display
+`incident_number` and treat the UUID-shaped fallback as a technical identifier.
+
+The recommendation prompt requests a concise diagnosis and numbered actions in plain text. It
+forbids Markdown tables, HTML, and duplicate incident identifier lists because evidence rendering
+belongs to the structured response. The response continues to omit the IAM endpoint's legacy
+`evidence` detail.
 
 Expected adapter failures use the existing safe `502` error envelope. The ServiceNow client treats
 non-2xx responses, invalid JSON, or a missing recommendation as failure and writes work notes only

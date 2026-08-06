@@ -48,7 +48,9 @@ or `different` without embedding or writing.
 
 Embeds the submitted symptoms, retrieves up to `top_k` incidents in the exact requested scope, and
 passes the evidence to Bedrock. The application copies `supporting_incident_ids` from retrieved rows,
-not from model output. See [`events/investigate.json`](events/investigate.json).
+not from model output. The backward-compatible `supporting_incidents` array also projects the
+ServiceNow incident number, service, similarity, root cause, and resolution directly from each
+validated retrieved memory. See [`events/investigate.json`](events/investigate.json).
 
 ### `GET /health`
 
@@ -61,7 +63,14 @@ Accepts the fixed payload emitted by the `AgenticMemoryClient` Script Include in
 ServiceNow application. The handler maps that payload to the existing investigation service using
 the server-owned `SERVICENOW_MEMORY_SCOPE`; callers cannot select a scope, filters, retrieval count,
 tool, or query. It returns only `recommendation` and `supporting_incident_ids`, which the existing
-ServiceNow parser accepts. The unresolved ServiceNow incident is never stored as historical memory.
+ServiceNow parser already accepts, plus the additive `supporting_incidents` array for readable
+evidence. Clients should display `incident_number`; when valid ServiceNow number metadata is absent,
+that field contains the technical `incident_id` fallback. The unresolved ServiceNow incident is
+never stored as historical memory.
+
+Recommendation text is concise plain text with a diagnosis and numbered actions. Structured
+supporting evidence is returned by application code rather than relying on model-generated Markdown
+tables or duplicated incident identifiers.
 
 The body is limited to 32 KiB, unknown or missing fields are rejected, string types and lengths are
 bounded, and `incident_sys_id`, `number`, and `short_description` must be non-empty. See
