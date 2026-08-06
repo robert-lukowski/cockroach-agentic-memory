@@ -54,6 +54,7 @@ jobs:
       - name: Retrieve ServiceNow secret and create one incident
         env:
           SERVICENOW_SECRET_ID: ${{ vars.SERVICENOW_SECRET_ID }}
+          SERVICENOW_CALLER_MODE: random
           SCENARIO: ${{ github.event.inputs.scenario || '' }}
         shell: bash
         run: |

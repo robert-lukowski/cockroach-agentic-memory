@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import re
 import secrets
 import sys
@@ -44,6 +45,12 @@ MAX_ATTEMPTS = 3
 _SCENARIO_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _INCIDENT_NUMBER_PATTERN = re.compile(r"INC\d{7,}")
 _SYS_ID_PATTERN = re.compile(r"[0-9a-f]{32}")
+_USER_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}")
+_CALLER_MODES = frozenset({"fixed", "random"})
+_INTEGRATION_TOKENS = frozenset(
+    {"api", "automation", "bot", "integration", "service", "svc", "system", "webservice"}
+)
+_NON_HUMAN_USER_NAMES = frozenset({"admin", "guest", "maint", "system"})
 _RESOLVED_FIELDS = frozenset(
     {"root_cause", "resolution", "close_notes", "resolved_at", "close_code"}
 )
@@ -57,22 +64,64 @@ class ServiceNowCredentials:
 
 
 @dataclass(frozen=True, slots=True)
+class CallerConfiguration:
+    mode: str
+    user_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ServiceNowConfiguration:
+    credentials: ServiceNowCredentials
+    caller: CallerConfiguration
+
+
+@dataclass(frozen=True, slots=True)
 class CreatedIncident:
     http_status: int
     number: str
-    sys_id: str
 
 
 @dataclass(frozen=True, slots=True)
 class GenerationResult:
     selected_scenario: str
     mode: str
+    caller_mode: str
+    caller_resolved: bool
     http_status: int | None
     created_incident_number: str | None
-    created_sys_id: str | None
 
 
-def parse_secret_json(raw_secret: str) -> ServiceNowCredentials:
+def caller_configuration_from_values(
+    values: Mapping[str, Any],
+    environment: Mapping[str, str] | None = None,
+) -> CallerConfiguration:
+    environment_values = os.environ if environment is None else environment
+    raw_mode = environment_values.get(
+        "SERVICENOW_CALLER_MODE",
+        values.get("SERVICENOW_CALLER_MODE", "fixed"),
+    )
+    if not isinstance(raw_mode, str) or raw_mode not in _CALLER_MODES:
+        raise ConfigurationError("SERVICENOW_CALLER_MODE must be fixed or random.")
+    raw_user_name = environment_values.get(
+        "SERVICENOW_CALLER_USER_NAME",
+        values.get("SERVICENOW_CALLER_USER_NAME"),
+    )
+    if raw_mode == "fixed":
+        if (
+            not isinstance(raw_user_name, str)
+            or _USER_NAME_PATTERN.fullmatch(raw_user_name) is None
+        ):
+            raise ConfigurationError(
+                "SERVICENOW_CALLER_USER_NAME is required for fixed caller mode."
+            )
+        return CallerConfiguration(raw_mode, raw_user_name)
+    return CallerConfiguration(raw_mode, None)
+
+
+def parse_secret_json(
+    raw_secret: str,
+    environment: Mapping[str, str] | None = None,
+) -> ServiceNowConfiguration:
     """Parse the expected secret without reflecting any secret content in failures."""
     try:
         payload = json.loads(raw_secret)
@@ -104,21 +153,27 @@ def parse_secret_json(raw_secret: str) -> ServiceNowCredentials:
         raise ConfigurationError(
             "SERVICENOW_INSTANCE_URL must be a credential-free HTTPS origin."
         )
-    return ServiceNowCredentials(
-        instance_url=instance_url,
-        username=values["SERVICENOW_USERNAME"],
-        password=values["SERVICENOW_PASSWORD"],
+    return ServiceNowConfiguration(
+        credentials=ServiceNowCredentials(
+            instance_url=instance_url,
+            username=values["SERVICENOW_USERNAME"],
+            password=values["SERVICENOW_PASSWORD"],
+        ),
+        caller=caller_configuration_from_values(payload, environment),
     )
 
 
-def credentials_from_secret_file(path: Path | None) -> ServiceNowCredentials:
+def configuration_from_secret_file(
+    path: Path | None,
+    environment: Mapping[str, str] | None = None,
+) -> ServiceNowConfiguration:
     if path is None:
         raise ConfigurationError("A ServiceNow secret file is required for live mode.")
     try:
         raw_secret = path.read_text(encoding="utf-8")
     except OSError as error:
         raise ConfigurationError("The ServiceNow secret file is unavailable.") from error
-    return parse_secret_json(raw_secret)
+    return parse_secret_json(raw_secret, environment)
 
 
 def load_active_scenarios(path: Path = DEFAULT_DATASET) -> dict[str, dict[str, Any]]:
@@ -194,7 +249,7 @@ def build_scheduled_payload(
 
 
 class ScheduledIncidentClient:
-    """Narrow create-only ServiceNow client with redacted bounded failures."""
+    """Narrow ServiceNow client for caller resolution and one incident create."""
 
     def __init__(
         self,
@@ -208,7 +263,7 @@ class ScheduledIncidentClient:
         encoded = base64.b64encode(
             f"{credentials.username}:{credentials.password}".encode()
         ).decode()
-        self._url = credentials.instance_url + "/api/now/table/incident"
+        self._base_url = credentials.instance_url
         self._headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -219,32 +274,17 @@ class ScheduledIncidentClient:
         self._max_attempts = max_attempts
         self._sleep = sleep
 
-    def create_incident(self, payload: Mapping[str, Any]) -> CreatedIncident:
-        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+    def _request(self, method: str, path: str, body: bytes | None = None):
         for attempt in range(1, self._max_attempts + 1):
             response = self._transport.request(
-                method="POST",
-                url=self._url,
+                method=method,
+                url=self._base_url + path,
                 headers=self._headers,
                 body=body,
                 timeout=self._timeout_seconds,
             )
             if 200 <= response.status < 300:
-                try:
-                    decoded = json.loads(response.body)
-                except json.JSONDecodeError as error:
-                    raise ServiceNowError("invalid response") from error
-                result = decoded.get("result") if isinstance(decoded, dict) else None
-                number = result.get("number") if isinstance(result, dict) else None
-                sys_id = result.get("sys_id") if isinstance(result, dict) else None
-                if (
-                    not isinstance(number, str)
-                    or _INCIDENT_NUMBER_PATTERN.fullmatch(number) is None
-                    or not isinstance(sys_id, str)
-                    or _SYS_ID_PATTERN.fullmatch(sys_id) is None
-                ):
-                    raise ServiceNowError("invalid response")
-                return CreatedIncident(response.status, number, sys_id)
+                return response
             retryable = response.status == 429 or 500 <= response.status <= 599
             if retryable and attempt < self._max_attempts:
                 self._sleep(float(2 ** (attempt - 1)))
@@ -253,6 +293,114 @@ class ScheduledIncidentClient:
             raise ServiceNowError(category, status=response.status)
         raise ServiceNowError("request failed")
 
+    @staticmethod
+    def _decode_result(response, *, expect_list: bool):
+        try:
+            decoded = json.loads(response.body)
+        except json.JSONDecodeError as error:
+            raise ServiceNowError("invalid response") from error
+        result = decoded.get("result") if isinstance(decoded, dict) else None
+        if expect_list:
+            if not isinstance(result, list) or not all(isinstance(item, dict) for item in result):
+                raise ServiceNowError("invalid response")
+        elif not isinstance(result, dict):
+            raise ServiceNowError("invalid response")
+        return result
+
+    def _list_users(self, *, query: str, limit: int) -> list[dict[str, Any]]:
+        parameters = urllib.parse.urlencode(
+            {
+                "sysparm_query": query,
+                "sysparm_fields": "sys_id,user_name,active,web_service_access_only",
+                "sysparm_limit": str(limit),
+                "sysparm_display_value": "false",
+                "sysparm_exclude_reference_link": "true",
+            }
+        )
+        response = self._request("GET", f"/api/now/table/sys_user?{parameters}")
+        return self._decode_result(response, expect_list=True)
+
+    def resolve_caller(
+        self,
+        configuration: CallerConfiguration,
+        *,
+        chooser: Callable[[Sequence[str]], str] = secrets.choice,
+    ) -> str:
+        if configuration.mode == "fixed":
+            records = self._list_users(
+                query=f"active=true^user_name={configuration.user_name}",
+                limit=2,
+            )
+            matches = [
+                record
+                for record in records
+                if record.get("user_name") == configuration.user_name
+                and _is_true(record.get("active"))
+                and _valid_sys_id(record.get("sys_id"))
+            ]
+            if len(matches) != 1:
+                raise ServiceNowError("caller resolution failed")
+            return str(matches[0]["sys_id"])
+
+        records = self._list_users(
+            query="active=true^user_nameISNOTEMPTY",
+            limit=1000,
+        )
+        eligible_ids: list[str] = []
+        for record in records:
+            user_name = record.get("user_name")
+            sys_id = record.get("sys_id")
+            if (
+                not isinstance(user_name, str)
+                or not user_name
+                or _USER_NAME_PATTERN.fullmatch(user_name) is None
+                or not _is_true(record.get("active"))
+                or _is_true(record.get("web_service_access_only"))
+                or _obvious_integration_user(user_name)
+                or not _valid_sys_id(sys_id)
+            ):
+                continue
+            if sys_id not in eligible_ids:
+                eligible_ids.append(sys_id)
+        if not eligible_ids:
+            raise ServiceNowError("caller resolution failed")
+        selected = chooser(tuple(eligible_ids))
+        if selected not in eligible_ids:
+            raise ServiceNowError("caller resolution failed")
+        return selected
+
+    def create_incident(self, payload: Mapping[str, Any]) -> CreatedIncident:
+        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+        response = self._request("POST", "/api/now/table/incident", body)
+        result = self._decode_result(response, expect_list=False)
+        number = result.get("number")
+        sys_id = result.get("sys_id")
+        if (
+            not isinstance(number, str)
+            or _INCIDENT_NUMBER_PATTERN.fullmatch(number) is None
+            or not _valid_sys_id(sys_id)
+        ):
+            raise ServiceNowError("invalid response")
+        return CreatedIncident(response.status, number)
+
+
+def _is_true(value: Any) -> bool:
+    return value is True or (isinstance(value, str) and value.lower() in {"1", "true"})
+
+
+def _valid_sys_id(value: Any) -> bool:
+    return isinstance(value, str) and _SYS_ID_PATTERN.fullmatch(value) is not None
+
+
+def _obvious_integration_user(user_name: str) -> bool:
+    normalized = user_name.casefold()
+    if normalized in _NON_HUMAN_USER_NAMES:
+        return True
+    tokens = set(re.split(r"[._-]+", normalized))
+    return bool(tokens.intersection(_INTEGRATION_TOKENS)) or normalized.startswith(
+        ("api", "automation", "bot", "integration", "service", "svc", "system", "webservice")
+    )
+
 
 def generate_incident(
     *,
@@ -260,28 +408,35 @@ def generate_incident(
     scenario: str | None,
     dry_run: bool,
     secret_file: Path | None,
-    chooser: Callable[[Sequence[str]], str] = secrets.choice,
+    scenario_chooser: Callable[[Sequence[str]], str] = secrets.choice,
+    caller_chooser: Callable[[Sequence[str]], str] = secrets.choice,
     correlation_factory: Callable[[], uuid.UUID] = uuid.uuid4,
     transport: HttpTransport | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    environment: Mapping[str, str] | None = None,
 ) -> GenerationResult:
     scenarios = load_active_scenarios(dataset)
-    selected, template = select_scenario(scenarios, scenario, chooser=chooser)
+    selected, template = select_scenario(scenarios, scenario, chooser=scenario_chooser)
     payload = build_scheduled_payload(template, correlation_id=correlation_factory())
     if dry_run:
-        return GenerationResult(selected, "dry-run", None, None, None)
-    credentials = credentials_from_secret_file(secret_file)
-    created = ScheduledIncidentClient(
-        credentials,
+        caller = caller_configuration_from_values({}, environment)
+        return GenerationResult(selected, "dry-run", caller.mode, False, None, None)
+    configuration = configuration_from_secret_file(secret_file, environment)
+    client = ScheduledIncidentClient(
+        configuration.credentials,
         transport=transport,
         sleep=sleep,
-    ).create_incident(payload)
+    )
+    caller_id = client.resolve_caller(configuration.caller, chooser=caller_chooser)
+    payload["caller_id"] = caller_id
+    created = client.create_incident(payload)
     return GenerationResult(
         selected,
         "live",
+        configuration.caller.mode,
+        True,
         created.http_status,
         created.number,
-        created.sys_id,
     )
 
 

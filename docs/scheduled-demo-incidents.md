@@ -17,9 +17,10 @@ and also supports `workflow_dispatch`. A concurrency group prevents overlapping 
 4. creates one active incident through the ServiceNow Table API; and
 5. deletes the temporary file on exit.
 
-It does not use static AWS keys or GitHub Secrets. It prints only the scenario, mode, HTTP status,
-created incident number, and created sys_id. Credentials, headers, request/response bodies, incident
-descriptions, and provider details are never printed.
+It does not use static AWS keys or GitHub Secrets. It prints only the scenario, mode, caller mode,
+caller resolution boolean, HTTP status, and created incident number. Credentials, headers,
+request/response bodies, incident descriptions, names, usernames, email addresses, sys_ids, and
+provider details are never printed.
 
 ## Required repository variables
 
@@ -32,9 +33,17 @@ The Secrets Manager value must be one JSON object:
 {
   "SERVICENOW_INSTANCE_URL": "https://<pdi-host>",
   "SERVICENOW_USERNAME": "<integration-user>",
-  "SERVICENOW_PASSWORD": "<protected-password>"
+  "SERVICENOW_PASSWORD": "<protected-password>",
+  "SERVICENOW_CALLER_MODE": "fixed",
+  "SERVICENOW_CALLER_USER_NAME": "<active-user-name>"
 }
 ```
+
+`SERVICENOW_CALLER_MODE` defaults to `fixed`. Fixed mode requires
+`SERVICENOW_CALLER_USER_NAME`; the generator performs an exact active `user_name` lookup and fails
+unless exactly one record matches. In `random` mode the username setting is ignored. The hackathon
+workflow sets `SERVICENOW_CALLER_MODE=random` as non-secret job configuration, so the existing
+secret does not need caller fields for scheduled runs.
 
 Do not store this JSON in GitHub, workflow YAML, repository variables, command history, or files in
 the repository.
@@ -47,6 +56,11 @@ new UUID correlation ID is generated for every invocation and sent in the standa
 time, or close code. Assignment group and CI references are intentionally empty; the generator does
 not create reference records.
 
+Caller resolution always completes before incident creation. Random mode queries active users with
+a non-empty `user_name`, excludes web-service-only users and obvious service, API, bot, automation,
+system, and integration accounts, and selects one eligible sys_id with `secrets.choice`. If no
+eligible caller exists, the run fails before the incident POST. Identity fields are never logged.
+
 TLS certificate verification is enabled and every request has a 20-second timeout. HTTP 429 and
 transient 5xx responses are retried at most twice after the initial request. HTTP 400, 401, and 403
 are never retried. A PDI returning 502 therefore causes one bounded failed workflow rather than an
@@ -55,9 +69,11 @@ unbounded loop.
 Run a deterministic local preview without AWS or ServiceNow access:
 
 ```powershell
+$env:SERVICENOW_CALLER_MODE = "random"
 .venv\Scripts\python scripts\generate_scheduled_incident.py `
   --scenario connect-outbound `
   --dry-run
+Remove-Item Env:SERVICENOW_CALLER_MODE
 ```
 
 ## OIDC infrastructure
