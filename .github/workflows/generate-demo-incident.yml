@@ -1,0 +1,73 @@
+name: Generate scheduled demo incident
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Optional active demo cluster name
+        required: false
+        type: string
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: scheduled-demo-incident
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Validate repository variables
+        env:
+          AWS_OIDC_ROLE_ARN: ${{ vars.AWS_OIDC_ROLE_ARN }}
+          SERVICENOW_SECRET_ID: ${{ vars.SERVICENOW_SECRET_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$AWS_OIDC_ROLE_ARN" || -z "$SERVICENOW_SECRET_ID" ]]; then
+            echo "Required repository variables are not configured." >&2
+            exit 1
+          fi
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v6.1.2
+        with:
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: scheduled-demo-incident-${{ github.run_id }}
+          mask-aws-account-id: true
+
+      - name: Retrieve ServiceNow secret and create one incident
+        env:
+          SERVICENOW_SECRET_ID: ${{ vars.SERVICENOW_SECRET_ID }}
+          SCENARIO: ${{ github.event.inputs.scenario || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          secret_file="$(mktemp "$RUNNER_TEMP/servicenow-secret.XXXXXX")"
+          trap 'rm -f "$secret_file"' EXIT
+          aws secretsmanager get-secret-value \
+            --region eu-central-1 \
+            --secret-id "$SERVICENOW_SECRET_ID" \
+            --query SecretString \
+            --output text > "$secret_file"
+          arguments=(--secret-file "$secret_file")
+          if [[ -n "$SCENARIO" ]]; then
+            arguments+=(--scenario "$SCENARIO")
+          fi
+          python scripts/generate_scheduled_incident.py "${arguments[@]}"

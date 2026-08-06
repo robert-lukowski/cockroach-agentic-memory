@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: GitHub OIDC access for scheduled Agentic Incident Memory demo incidents
+
+Parameters:
+  ServiceNowSecretArn:
+    Type: String
+    Description: ARN of the one existing JSON secret containing ServiceNow credentials
+    AllowedPattern: "^arn:aws:secretsmanager:eu-central-1:[0-9]{12}:secret:.+$"
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  ScheduledDemoIncidentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: agentic-memory-github-demo-incidents
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: repo:robert-lukowski/cockroach-agentic-memory:ref:refs/heads/main
+      Policies:
+        - PolicyName: read-servicenow-demo-secret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref ServiceNowSecretArn
+
+Outputs:
+  GitHubOidcRoleArn:
+    Description: Set this value as the AWS_OIDC_ROLE_ARN repository variable
+    Value: !GetAtt ScheduledDemoIncidentRole.Arn
