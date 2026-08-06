@@ -2,22 +2,29 @@
 
 from __future__ import annotations
 
-import streamlit as st
+import sys
+from pathlib import Path
 
-from frontend.api_client import (
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+import streamlit as st  # noqa: E402
+
+from frontend.api_client import (  # noqa: E402
     AgenticMemoryApiClient,
     ApiClientError,
     FrontendConfigurationError,
     load_config,
 )
-from frontend.models import (
+from frontend.models import (  # noqa: E402
     DEMO_SCENARIOS,
     InputValidationError,
     InvestigationInput,
     ResponseValidationError,
     normalize_analysis_response,
 )
-from frontend.ui_components import (
+from frontend.ui_components import (  # noqa: E402
     render_metrics,
     render_recommendation,
     render_supporting_incidents,
