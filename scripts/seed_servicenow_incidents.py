@@ -263,13 +263,13 @@ def select_records(
 def validate_state_mapping(client: ServiceNowClient) -> None:
     dictionary = client.list_records(
         "sys_dictionary",
-        query="name=incident^element=state",
+        query="name=task^element=state",
         fields=("name", "element", "internal_type"),
         limit=2,
     )
     if len(dictionary) != 1:
         raise ConfigurationError(
-            "The PDI incident.state dictionary entry is unavailable or ambiguous."
+            "The PDI task.state dictionary entry is unavailable or ambiguous."
         )
     choices = client.list_records(
         "sys_choice",

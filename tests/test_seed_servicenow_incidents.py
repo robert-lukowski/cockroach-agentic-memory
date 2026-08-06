@@ -40,7 +40,8 @@ class FakeServiceNowClient:
     def list_records(self, table, *, query, fields, limit=100):
         del fields, limit
         if table == "sys_dictionary":
-            return [{"name": "incident", "element": "state", "internal_type": "integer"}]
+            assert query == "name=task^element=state"
+            return [{"name": "task", "element": "state", "internal_type": "integer"}]
         if table == "sys_choice":
             return [
                 {"label": label, "value": value}
