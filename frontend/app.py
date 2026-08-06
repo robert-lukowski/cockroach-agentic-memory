@@ -1,0 +1,164 @@
+"""Agentic Incident Command Center Streamlit application."""
+
+from __future__ import annotations
+
+import streamlit as st
+
+from frontend.api_client import (
+    AgenticMemoryApiClient,
+    ApiClientError,
+    FrontendConfigurationError,
+    load_config,
+)
+from frontend.models import (
+    DEMO_SCENARIOS,
+    InputValidationError,
+    InvestigationInput,
+    ResponseValidationError,
+    normalize_analysis_response,
+)
+from frontend.ui_components import (
+    render_metrics,
+    render_recommendation,
+    render_supporting_incidents,
+    render_timings,
+)
+
+st.set_page_config(
+    page_title="Agentic Incident Command Center",
+    page_icon="🚨",
+    layout="wide",
+)
+
+
+def _secrets() -> dict[str, object]:
+    try:
+        return dict(st.secrets)
+    except Exception:
+        return {}
+
+
+def _load_scenario() -> None:
+    scenario_key = st.session_state.get("scenario_key", "custom")
+    scenario = next((item for item in DEMO_SCENARIOS if item.key == scenario_key), None)
+    values = {
+        "incident_number": "",
+        "incident_title": "",
+        "incident_symptoms": "",
+        "incident_service": "",
+        "incident_environment": "development",
+    }
+    if scenario is not None:
+        values.update(
+            {
+                "incident_number": scenario.incident_number,
+                "incident_title": scenario.title,
+                "incident_symptoms": scenario.symptoms,
+                "incident_service": scenario.service,
+                "incident_environment": scenario.environment,
+            }
+        )
+    st.session_state.update(values)
+
+
+def _initialize_form() -> None:
+    if "incident_title" not in st.session_state:
+        st.session_state["scenario_key"] = DEMO_SCENARIOS[0].key
+        _load_scenario()
+
+
+def main() -> None:
+    st.title("Agentic Incident Command Center")
+    st.caption(
+        "Investigate active incidents using resolved operational memory from CockroachDB and "
+        "grounded recommendations from Amazon Bedrock."
+    )
+    _initialize_form()
+    scenario_options = {"custom": "Custom incident"} | {
+        scenario.key: scenario.label for scenario in DEMO_SCENARIOS
+    }
+    st.selectbox(
+        "Demo scenario",
+        options=list(scenario_options),
+        format_func=scenario_options.get,
+        key="scenario_key",
+        on_change=_load_scenario,
+    )
+
+    with st.form("investigation_form"):
+        title = st.text_input(
+            "Incident title / short description *",
+            key="incident_title",
+            max_chars=256,
+        )
+        symptoms = st.text_area(
+            "Symptoms / description *",
+            key="incident_symptoms",
+            height=180,
+            max_chars=7_900,
+        )
+        left, middle, right = st.columns(3)
+        service = left.text_input("Service", key="incident_service", max_chars=256)
+        environment = middle.text_input(
+            "Environment",
+            key="incident_environment",
+            max_chars=64,
+        )
+        incident_number = right.text_input(
+            "Incident number (optional)",
+            key="incident_number",
+            max_chars=40,
+        )
+        submitted = st.form_submit_button(
+            "Run Agentic Investigation",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if not submitted:
+        st.info("Choose a synthetic scenario or enter an incident, then run the investigation.")
+        return
+
+    try:
+        request = InvestigationInput(
+            title=title,
+            symptoms=symptoms,
+            service=service,
+            environment=environment,
+            incident_number=incident_number,
+        )
+        payload = request.to_api_payload()
+        config = load_config(secrets=_secrets())
+        with st.spinner("Retrieving incident memory and generating a recommendation…"):
+            api_result = AgenticMemoryApiClient(config).analyze(payload)
+            result = normalize_analysis_response(api_result.payload)
+    except InputValidationError as error:
+        st.error(str(error))
+        return
+    except FrontendConfigurationError as error:
+        st.error("The frontend is not configured for the analysis API.")
+        with st.expander("Sanitized technical details"):
+            st.text(str(error))
+        return
+    except ApiClientError as error:
+        st.error("The investigation service could not complete the request.")
+        with st.expander("Sanitized technical details"):
+            st.text(f"Category: {error.category}")
+            if error.status is not None:
+                st.text(f"HTTP status: {error.status}")
+        return
+    except ResponseValidationError as error:
+        st.error("The investigation service returned an incomplete response.")
+        with st.expander("Sanitized technical details"):
+            st.text(str(error))
+        return
+
+    st.divider()
+    render_metrics(result, round_trip_ms=api_result.round_trip_ms)
+    render_recommendation(result)
+    render_timings(result, round_trip_ms=api_result.round_trip_ms)
+    render_supporting_incidents(result)
+
+
+if __name__ == "__main__":
+    main()

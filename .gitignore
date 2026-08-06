@@ -16,3 +16,4 @@ venv/
 credentials
 *.pem
 .vscode/settings.json
+.streamlit/secrets.toml
