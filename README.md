@@ -129,15 +129,31 @@ API-key-protected analysis endpoint and supports:
 
 ### [Open the live Incident Command Center](https://agentic-incident-command-center.streamlit.app)
 
-<!-- Add an Incident Command Center hero screenshot here before final submission. -->
+## Product showcase
 
-### Operational Memory, Visualized
+### Operational Memory Graph
 
-The graph is a compact visualization of one retrieval result, not a general-purpose knowledge
-graph. Its center node is the current incident; surrounding nodes are the resolved memories returned
-by CockroachDB vector retrieval. Each connection is one semantic retrieval link and uses similarity
-from the existing API response. The graph shows incident numbers and services when available and
-does not invent relationships between historical incidents.
+The current incident sits at the center of a compact star visualization, connected to resolved
+operational memories returned by CockroachDB semantic retrieval. Labels expose the available
+incident number and service without inventing relationships between historical incidents.
+
+[![Operational Memory Graph with the current incident connected to resolved CockroachDB memories](docs/assets/operational-memory-graph.png)](docs/assets/operational-memory-graph.png)
+
+### Verified Security Controls
+
+The frontend summarizes repository-verified architectural guardrails such as GitHub OIDC, temporary
+AWS credentials, Secrets Manager, least-privilege IAM, Managed MCP, and HTTPS. The scorecard is an
+architecture view rather than live request telemetry.
+
+[![Verified Security Controls scorecard in the Incident Command Center](docs/assets/security-controls.png)](docs/assets/security-controls.png)
+
+### ServiceNow analysis in work notes
+
+The ServiceNow UI Action brings the grounded recommendation and readable supporting incidents back
+into the operator's existing workflow. The resulting work notes preserve incident numbers, services,
+similarity, historical root causes, and resolutions for practical follow-up.
+
+[![Agentic Incident Memory recommendation and supporting incidents in ServiceNow work notes](docs/assets/servicenow-work-notes.png)](docs/assets/servicenow-work-notes.png)
 
 ## ServiceNow integration
 
@@ -411,6 +427,3 @@ for scoped source.
   patch generation, or automated pull-request creation.
 
 </details>
-
-<!-- Recommended future assets: Command Center hero, Operational Memory Graph, ServiceNow work_notes,
-and a short end-to-end demo GIF. -->
