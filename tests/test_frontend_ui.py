@@ -56,14 +56,26 @@ def test_client_round_trip_is_rendered_once_and_not_mixed_with_backend_timings(
     ui_components.render_metrics(result, round_trip_ms=1_234.0)
     ui_components.render_timings(result)
 
-    assert metric_calls[-1] == ("Client round trip", "1,234 ms")
-    assert sum(label == "Client round trip" for label, _value in metric_calls) == 1
+    assert metric_calls[-1] == ("Client-observed round trip", "1,234 ms")
+    assert sum(label == "Client-observed round trip" for label, _value in metric_calls) == 1
     assert timing_lines == [
         "Vector retrieval: 120 ms",
         "Bedrock inference: 800 ms",
         "Total request: 1,000 ms",
     ]
     assert captions == []
+
+
+def test_transient_retry_status_is_shown_only_after_a_retry(monkeypatch) -> None:
+    messages: list[str] = []
+    monkeypatch.setattr(ui_components.st, "info", messages.append)
+
+    ui_components.render_transient_retry_status(transient_retry_occurred=False)
+    ui_components.render_transient_retry_status(transient_retry_occurred=True)
+
+    assert messages == [
+        "Transient backend dependency failure detected. Automatic retry succeeded."
+    ]
 
 
 def test_plotly_figure_uses_similarity_and_escapes_hover_text() -> None:

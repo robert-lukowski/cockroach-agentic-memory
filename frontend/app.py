@@ -30,6 +30,8 @@ from frontend.ui_components import (  # noqa: E402
     render_recommendation,
     render_supporting_incidents,
     render_timings,
+    render_transient_retry_status,
+    render_verified_security_controls,
 )
 
 st.set_page_config(
@@ -162,6 +164,9 @@ def main() -> None:
         return
 
     st.divider()
+    render_transient_retry_status(
+        transient_retry_occurred=api_result.transient_retry_occurred
+    )
     render_metrics(result, round_trip_ms=api_result.round_trip_ms)
     render_recommendation(result)
     render_operational_memory_graph(
@@ -171,6 +176,7 @@ def main() -> None:
     )
     render_timings(result)
     render_supporting_incidents(result)
+    render_verified_security_controls()
 
 
 if __name__ == "__main__":

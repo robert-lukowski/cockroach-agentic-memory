@@ -7,6 +7,7 @@ import json
 import pytest
 
 from frontend.api_client import (
+    TRANSIENT_RETRY_DELAY_SECONDS,
     AgenticMemoryApiClient,
     ApiClientError,
     FrontendConfig,
@@ -19,13 +20,13 @@ ENDPOINT = "https://example.execute-api.eu-central-1.amazonaws.com/v1/servicenow
 
 
 class FakeTransport:
-    def __init__(self, response: HttpResponse) -> None:
-        self.response = response
+    def __init__(self, response: HttpResponse | list[HttpResponse]) -> None:
+        self.responses = response if isinstance(response, list) else [response]
         self.calls: list[dict[str, object]] = []
 
     def request(self, **kwargs):
         self.calls.append(kwargs)
-        return self.response
+        return self.responses[len(self.calls) - 1]
 
 
 def config(api_key: str = "private-demo-key") -> FrontendConfig:
@@ -90,10 +91,98 @@ def test_posts_json_and_reports_measured_round_trip() -> None:
 
     assert result.payload["recommendation"] == "Use the retrieved evidence."
     assert result.round_trip_ms == 250.0
+    assert result.transient_retry_occurred is False
+    assert len(transport.calls) == 1
     call = transport.calls[0]
     assert call["timeout"] == 30.0
     assert call["headers"]["x-api-key"] == "private-demo-key"
     assert json.loads(call["body"])["number"] == "INC9000003"
+
+
+@pytest.mark.parametrize("transient_status", [502, 503])
+def test_retries_one_transient_response_and_returns_success(transient_status: int) -> None:
+    success = HttpResponse(
+        status=200,
+        body=json.dumps({"recommendation": "Use the retrieved evidence."}).encode(),
+    )
+    transport = FakeTransport(
+        [HttpResponse(status=transient_status, body=b"provider detail"), success]
+    )
+    sleep_calls: list[float] = []
+    ticks = iter((10.0, 11.25))
+    client = AgenticMemoryApiClient(
+        config(),
+        transport=transport,
+        clock=lambda: next(ticks),
+        sleeper=sleep_calls.append,
+    )
+
+    result = client.analyze({"number": "INC9000003"})
+
+    assert result.payload["recommendation"] == "Use the retrieved evidence."
+    assert result.round_trip_ms == 1_250.0
+    assert result.transient_retry_occurred is True
+    assert len(transport.calls) == 2
+    assert transport.calls[0] == transport.calls[1]
+    assert sleep_calls == [TRANSIENT_RETRY_DELAY_SECONDS]
+
+
+@pytest.mark.parametrize("transient_status", [502, 503])
+def test_second_transient_failure_is_sanitized_without_third_attempt(
+    transient_status: int,
+) -> None:
+    transport = FakeTransport(
+        [
+            HttpResponse(status=transient_status, body=b"first provider detail"),
+            HttpResponse(status=transient_status, body=b"second provider detail"),
+        ]
+    )
+    sleep_calls: list[float] = []
+    client = AgenticMemoryApiClient(
+        config(),
+        transport=transport,
+        sleeper=sleep_calls.append,
+    )
+
+    with pytest.raises(ApiClientError, match=f"HTTP {transient_status}") as captured:
+        client.analyze({"number": "INC9000003"})
+
+    assert len(transport.calls) == 2
+    assert sleep_calls == [TRANSIENT_RETRY_DELAY_SECONDS]
+    assert "provider detail" not in str(captured.value)
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 429, 500, 504])
+def test_non_retryable_status_makes_one_request(status: int) -> None:
+    transport = FakeTransport(HttpResponse(status=status, body=b"provider detail"))
+    sleep_calls: list[float] = []
+    client = AgenticMemoryApiClient(
+        config(),
+        transport=transport,
+        sleeper=sleep_calls.append,
+    )
+
+    with pytest.raises(ApiClientError, match=f"HTTP {status}"):
+        client.analyze({"number": "INC9000003"})
+
+    assert len(transport.calls) == 1
+    assert sleep_calls == []
+
+
+def test_invalid_json_does_not_retry() -> None:
+    transport = FakeTransport(HttpResponse(status=200, body=b"not-json"))
+    sleep_calls: list[float] = []
+    client = AgenticMemoryApiClient(
+        config(),
+        transport=transport,
+        sleeper=sleep_calls.append,
+    )
+
+    with pytest.raises(ApiClientError, match="invalid JSON"):
+        client.analyze({"number": "INC9000003"})
+
+    assert len(transport.calls) == 1
+    assert sleep_calls == []
 
 
 @pytest.mark.parametrize(

@@ -9,6 +9,7 @@ import streamlit as st
 
 from frontend.graph import GraphNode, OperationalMemoryGraph, build_operational_memory_graph
 from frontend.models import AnalysisResult, format_milliseconds, format_percentage
+from frontend.security_controls import VERIFIED_SECURITY_CONTROLS
 
 
 def render_metrics(result: AnalysisResult, *, round_trip_ms: float) -> None:
@@ -16,7 +17,12 @@ def render_metrics(result: AnalysisResult, *, round_trip_ms: float) -> None:
     columns[0].metric("Best semantic match", format_percentage(result.best_similarity))
     columns[1].metric("Supporting incidents", str(result.supporting_count))
     columns[2].metric("Confidence", format_percentage(result.confidence))
-    columns[3].metric("Client round trip", format_milliseconds(round_trip_ms))
+    columns[3].metric("Client-observed round trip", format_milliseconds(round_trip_ms))
+
+
+def render_transient_retry_status(*, transient_retry_occurred: bool) -> None:
+    if transient_retry_occurred:
+        st.info("Transient backend dependency failure detected. Automatic retry succeeded.")
 
 
 def render_recommendation(result: AnalysisResult) -> None:
@@ -183,3 +189,19 @@ def render_supporting_incidents(result: AnalysisResult) -> None:
             st.text(f"{index}. {incident_id}")
         return
     st.info("No supporting incidents were returned for this investigation.")
+
+
+def render_verified_security_controls() -> None:
+    st.divider()
+    st.subheader("Verified Security Controls")
+    st.caption(
+        "Architecture controls verified from the deployed project configuration; this panel "
+        "is not live request telemetry."
+    )
+    columns = st.columns(3)
+    for index, control in enumerate(VERIFIED_SECURITY_CONTROLS):
+        with columns[index % len(columns)]:
+            with st.container(border=True):
+                st.markdown(f"**{control.name}**")
+                st.success(f"Status: {control.status}")
+                st.caption(control.description)

@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 DEFAULT_TIMEOUT_SECONDS = 45.0
+TRANSIENT_RETRY_DELAY_SECONDS = 1.0
+_TRANSIENT_RETRY_STATUSES = frozenset({502, 503})
 _TIMEOUT_NAMES = (
     "AGENTIC_MEMORY_REQUEST_TIMEOUT_SECONDS",
     "AGENTIC_MEMORY_REQUEST_TIMEOUT",
@@ -52,6 +54,7 @@ class HttpResponse:
 class ApiCallResult:
     payload: dict[str, Any]
     round_trip_ms: float
+    transient_retry_occurred: bool
 
 
 class HttpTransport(Protocol):
@@ -185,24 +188,36 @@ class AgenticMemoryApiClient:
         *,
         transport: HttpTransport | None = None,
         clock=time.perf_counter,
+        sleeper=time.sleep,
     ) -> None:
         self._config = config
         self._transport = transport or UrllibTransport()
         self._clock = clock
+        self._sleeper = sleeper
 
     def analyze(self, payload: Mapping[str, str]) -> ApiCallResult:
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "x-api-key": self._config.api_key,
+        }
         started = self._clock()
         response = self._transport.request(
             url=self._config.endpoint,
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "x-api-key": self._config.api_key,
-            },
+            headers=headers,
             body=body,
             timeout=self._config.timeout_seconds,
         )
+        transient_retry_occurred = response.status in _TRANSIENT_RETRY_STATUSES
+        if transient_retry_occurred:
+            self._sleeper(TRANSIENT_RETRY_DELAY_SECONDS)
+            response = self._transport.request(
+                url=self._config.endpoint,
+                headers=headers,
+                body=body,
+                timeout=self._config.timeout_seconds,
+            )
         elapsed_ms = (self._clock() - started) * 1_000
         if not 200 <= response.status < 300:
             raise ApiClientError(
@@ -217,4 +232,8 @@ class AgenticMemoryApiClient:
             raise ApiClientError("The backend returned invalid JSON.") from error
         if not isinstance(decoded, dict):
             raise ApiClientError("The backend returned an invalid response object.")
-        return ApiCallResult(payload=decoded, round_trip_ms=elapsed_ms)
+        return ApiCallResult(
+            payload=decoded,
+            round_trip_ms=elapsed_ms,
+            transient_retry_occurred=transient_retry_occurred,
+        )
