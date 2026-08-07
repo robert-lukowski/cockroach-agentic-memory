@@ -99,10 +99,10 @@ def test_only_resolved_records_are_sent() -> None:
 
     summary = synchronize_records(DATASET, client=client)
 
-    assert summary.selected_resolved == 20
+    assert summary.selected_resolved == 50
     assert summary.skipped_active == 10
-    assert summary.created == 20
-    assert len(client.calls) == 20
+    assert summary.created == 50
+    assert len(client.calls) == 50
     assert all(call["root_cause"] and call["resolution"] for call in client.calls)
     active_sources = {record["source_id"] for record in DATASET if record["active"]}
     assert active_sources.isdisjoint(call["source_id"] for call in client.calls)
@@ -114,11 +114,11 @@ def test_repeated_sync_is_idempotent() -> None:
     first = synchronize_records(DATASET, client=client)
     second = synchronize_records(DATASET, client=client)
 
-    assert first.created == 20
+    assert first.created == 50
     assert second.created == 0
     assert second.updated == 0
-    assert second.already_present == 20
-    assert len(client.memories) == 20
+    assert second.already_present == 50
+    assert len(client.memories) == 50
 
 
 def test_verify_only_does_not_create_absent_memories() -> None:

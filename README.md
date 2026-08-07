@@ -5,7 +5,7 @@
 
 [![Live Demo](https://img.shields.io/badge/Streamlit-Live%20Demo-FF4B4B?logo=streamlit&logoColor=white)](https://agentic-incident-command-center.streamlit.app)
 ![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-220%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-225%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-92.12%25-brightgreen)
 ![CockroachDB](https://img.shields.io/badge/CockroachDB-operational%20memory-6933FF?logo=cockroachlabs&logoColor=white)
 ![Amazon Bedrock](https://img.shields.io/badge/Amazon%20Bedrock-grounded%20generation-232F3E)
@@ -40,11 +40,11 @@ validated historical evidence.
 
 | Project evidence | Current value |
 | --- | ---: |
-| Synthetic ServiceNow incidents | **30** |
-| Resolved incidents synchronized as operational memory | **20** |
+| Synthetic ServiceNow incidents | **60** |
+| Resolved incidents synchronized as operational memory | **50** |
 | Active incidents retained for investigation | **10** |
 | Supporting resolved incidents per ServiceNow investigation | **Up to 5** |
-| Automated tests | **220 passing** |
+| Automated tests | **225 passing** |
 | Test coverage | **92.12%** |
 | Static AWS access keys required by the GitHub → AWS OIDC automation flow | **0** |
 

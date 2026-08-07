@@ -18,6 +18,7 @@ from scripts.seed_servicenow_incidents import (
     ServiceNowError,
     build_incident_payload,
     configuration_from_environment,
+    resolve_incident_classifications,
     seed_records,
     select_demo_close_code,
     select_records,
@@ -41,6 +42,13 @@ class FakeServiceNowClient:
             {"label": "Known error", "value": "known_error"},
             {"label": "Solution provided", "value": "solution_provided"},
         ]
+        self.category_choices = [
+            {"label": "Inquiry / Help", "value": "inquiry"},
+            {"label": "Database", "value": "database"},
+        ]
+        self.subcategory_choices = [
+            {"label": "DB2", "value": "db2", "dependent_value": "database"},
+        ]
 
     def list_records(self, table, *, query, fields, limit=100):
         del fields, limit
@@ -50,6 +58,10 @@ class FakeServiceNowClient:
         if table == "sys_choice":
             if "element=close_code" in query:
                 return deepcopy(self.close_code_choices)
+            if "element=category" in query:
+                return deepcopy(self.category_choices)
+            if "element=subcategory" in query:
+                return deepcopy(self.subcategory_choices)
             return [
                 {"label": label, "value": value}
                 for label, value in self.state_mapping.items()
@@ -109,8 +121,8 @@ def test_dataset_filtering_and_limit() -> None:
 
     assert len(active) == 4
     assert all(record["active"] for record in active)
-    assert skipped_active == 26
-    assert len(resolved) == 20
+    assert skipped_active == 56
+    assert len(resolved) == 50
     assert all(not record["active"] for record in resolved)
     assert skipped_resolved == 10
 
@@ -133,6 +145,18 @@ def test_demo_close_code_uses_valid_preferred_pdi_choice() -> None:
     )
 
 
+def test_classifications_use_active_pdi_values_and_generic_fallback() -> None:
+    client = FakeServiceNowClient()
+
+    classifications = resolve_incident_classifications(
+        client,
+        [DATASET[0], DATASET[27]],
+    )
+
+    assert classifications["INC9000001"] == ("inquiry", "")
+    assert classifications["INC9000028"] == ("database", "")
+
+
 def test_resolved_payload_uses_pdi_close_code_without_changing_resolution() -> None:
     record = deepcopy(DATASET[0])
 
@@ -147,6 +171,7 @@ def test_resolved_payload_uses_pdi_close_code_without_changing_resolution() -> N
     assert record["root_cause"] in payload["close_notes"]
     assert record["resolution"] in payload["close_notes"]
     assert record["close_notes"] in payload["close_notes"]
+    assert "priority" not in payload
 
 
 def test_create_update_and_unchanged_behavior() -> None:
@@ -171,6 +196,30 @@ def test_create_update_and_unchanged_behavior() -> None:
     assert len(client.updated) == 1
     assert len(client.created) == 1
     assert json.dumps(client.created[0]).count(SYNTHETIC_MARKER) == 1
+
+
+def test_terminal_resolved_and_closed_states_are_idempotent() -> None:
+    record = deepcopy(DATASET[0])
+    client = FakeServiceNowClient()
+    desired = build_incident_payload(
+        record,
+        assignment_group_id=None,
+        cmdb_ci_id=None,
+        category_value="inquiry",
+        subcategory_value="",
+    )
+    client.incidents[record["number"]] = [
+        {"sys_id": INCIDENT_ID, **desired, "state": STATE_MAPPING["Closed"]}
+    ]
+
+    summary = seed_records(
+        [record],
+        client=client,
+        classification_values={record["number"]: ("inquiry", "")},
+    )
+
+    assert summary.unchanged == 1
+    assert summary.updated == 0
 
 
 def test_duplicate_incident_number_fails_without_write() -> None:
@@ -212,6 +261,18 @@ def test_active_payload_has_marker_but_no_resolution_fields() -> None:
     assert json.dumps(payload).count(SYNTHETIC_MARKER) == 1
     for field in ("resolved_at", "close_code", "close_notes", "root_cause", "resolution"):
         assert field not in payload
+
+
+def test_every_dataset_payload_contains_one_synthetic_marker() -> None:
+    for record in DATASET:
+        payload = build_incident_payload(
+            record,
+            assignment_group_id=None,
+            cmdb_ci_id=None,
+            close_code_value="solution_provided" if not record["active"] else None,
+        )
+
+        assert json.dumps(payload).count(SYNTHETIC_MARKER) == 1
 
 
 def test_retry_is_bounded_to_429_and_transient_5xx() -> None:

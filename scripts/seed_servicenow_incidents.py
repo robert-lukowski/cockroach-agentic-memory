@@ -330,6 +330,66 @@ def select_demo_close_code(client: ServiceNowClient) -> tuple[str, str]:
     raise ConfigurationError("The PDI has no active incident.close_code choices.")
 
 
+def resolve_incident_classifications(
+    client: ServiceNowClient,
+    records: Sequence[Mapping[str, Any]],
+) -> dict[str, tuple[str, str]]:
+    """Map display classifications to active PDI values with a safe generic fallback."""
+    category_choices = client.list_records(
+        "sys_choice",
+        query="name=incident^element=category^inactive=false",
+        fields=("label", "value"),
+        limit=100,
+    )
+    category_values: dict[str, str] = {}
+    for choice in category_choices:
+        label = choice.get("label")
+        value = choice.get("value")
+        if not isinstance(label, str) or not isinstance(value, str) or not label or not value:
+            continue
+        key = label.casefold()
+        if key in category_values and category_values[key] != value:
+            raise ConfigurationError("The PDI incident category choices are ambiguous.")
+        category_values[key] = value
+    fallback_category = category_values.get("inquiry / help")
+    if fallback_category is None:
+        raise ConfigurationError("The PDI generic incident category choice is unavailable.")
+
+    subcategory_choices = client.list_records(
+        "sys_choice",
+        query="name=incident^element=subcategory^inactive=false",
+        fields=("label", "value", "dependent_value"),
+        limit=200,
+    )
+    subcategory_values: dict[tuple[str, str], str] = {}
+    for choice in subcategory_choices:
+        label = choice.get("label")
+        value = choice.get("value")
+        dependent_value = choice.get("dependent_value")
+        if not all(isinstance(item, str) for item in (label, value, dependent_value)):
+            continue
+        if not label or not value:
+            continue
+        key = (dependent_value.casefold(), label.casefold())
+        if key in subcategory_values and subcategory_values[key] != value:
+            raise ConfigurationError("The PDI incident subcategory choices are ambiguous.")
+        subcategory_values[key] = value
+
+    resolved: dict[str, tuple[str, str]] = {}
+    for record in records:
+        number = str(record["number"])
+        category = category_values.get(
+            str(record["category"]).casefold(),
+            fallback_category,
+        )
+        subcategory = subcategory_values.get(
+            (category.casefold(), str(record["subcategory"]).casefold()),
+            "",
+        )
+        resolved[number] = (category, subcategory)
+    return resolved
+
+
 def _reference_id(
     client: ServiceNowClient,
     *,
@@ -362,15 +422,18 @@ def build_incident_payload(
     assignment_group_id: str | None,
     cmdb_ci_id: str | None,
     close_code_value: str | None = None,
+    category_value: str | None = None,
+    subcategory_value: str | None = None,
 ) -> dict[str, Any]:
     description = str(record["description"]).replace(SYNTHETIC_MARKER, "").strip()
     payload: dict[str, Any] = {
         "number": record["number"],
         "short_description": record["short_description"],
         "description": f"{description}\n\n{SYNTHETIC_MARKER}",
-        "category": record["category"],
-        "subcategory": record["subcategory"],
-        "priority": str(record["priority"]).split(" ", maxsplit=1)[0],
+        "category": category_value if category_value is not None else record["category"],
+        "subcategory": (
+            subcategory_value if subcategory_value is not None else record["subcategory"]
+        ),
         "impact": str(record["impact"]).split(" ", maxsplit=1)[0],
         "urgency": str(record["urgency"]).split(" ", maxsplit=1)[0],
         "state": STATE_MAPPING[str(record["state"])],
@@ -400,6 +463,11 @@ def build_incident_payload(
 def _same_values(existing: Mapping[str, Any], desired: Mapping[str, Any]) -> bool:
     for field, desired_value in desired.items():
         existing_value = existing.get(field)
+        if field == "state" and {
+            str(existing_value),
+            str(desired_value),
+        } <= {STATE_MAPPING["Resolved"], STATE_MAPPING["Closed"]}:
+            continue
         if isinstance(desired_value, bool):
             if str(existing_value).lower() != str(desired_value).lower():
                 return False
@@ -416,6 +484,7 @@ def seed_records(
     verify_only: bool = False,
     skipped: int = 0,
     close_code_value: str | None = None,
+    classification_values: Mapping[str, tuple[str, str]] | None = None,
     warning: Callable[[str], None] = lambda message: print(message, file=sys.stderr),
 ) -> SeedSummary:
     summary = SeedSummary(selected=len(records), skipped=skipped)
@@ -462,6 +531,16 @@ def seed_records(
                 assignment_group_id=group_id,
                 cmdb_ci_id=ci_id,
                 close_code_value=close_code_value,
+                category_value=(
+                    classification_values[number][0]
+                    if classification_values is not None
+                    else None
+                ),
+                subcategory_value=(
+                    classification_values[number][1]
+                    if classification_values is not None
+                    else None
+                ),
             )
             matches = client.list_records(
                 "incident",
@@ -552,6 +631,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if any(record.get("active") is False for record in selected)
             else None
         )
+        classification_values = resolve_incident_classifications(client, selected)
         summary = seed_records(
             selected,
             client=client,
@@ -559,6 +639,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             verify_only=args.verify_only,
             skipped=skipped,
             close_code_value=(selected_close_code[1] if selected_close_code else None),
+            classification_values=classification_values,
         )
     except (ConfigurationError, ServiceNowError) as error:
         print(f"error: {error}", file=sys.stderr)

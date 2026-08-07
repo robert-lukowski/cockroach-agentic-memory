@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections import Counter
@@ -94,6 +95,7 @@ SECRET_LIKE_PATTERNS = {
     "account identifier": re.compile(r"\b\d{12}\b"),
     "phone number": re.compile(r"(?<!\w)(?:\+?\d[ .()-]*){10,}(?!\w)"),
 }
+EXISTING_RECORDS_DIGEST = "ee9c294af2df5ab86cf6b08a551f406ecd0e54f1a060481d94be9fe4fa70fa92"
 
 
 @pytest.fixture(scope="module")
@@ -124,7 +126,7 @@ def _searchable_text(incident: dict[str, Any]) -> str:
 
 
 def test_dataset_has_exact_size_schema_and_types(incidents) -> None:
-    assert len(incidents) == 30
+    assert len(incidents) == 60
     for incident in incidents:
         assert isinstance(incident, dict)
         assert set(incident) == EXPECTED_FIELDS
@@ -144,8 +146,8 @@ def test_dataset_uses_stable_unique_identifiers(incidents) -> None:
     sys_ids = [incident["incident_sys_id"] for incident in incidents]
     source_ids = [incident["source_id"] for incident in incidents]
 
-    assert numbers == [f"INC{9_000_000 + index}" for index in range(1, 31)]
-    assert sys_ids == [f"{index:032x}" for index in range(1, 31)]
+    assert numbers == [f"INC{9_000_000 + index}" for index in range(1, 61)]
+    assert sys_ids == [f"{index:032x}" for index in range(1, 61)]
     assert len(numbers) == len(set(numbers))
     assert len(sys_ids) == len(set(sys_ids))
     assert len(source_ids) == len(set(source_ids))
@@ -158,7 +160,7 @@ def test_resolved_and_active_consistency(incidents) -> None:
     resolved = [incident for incident in incidents if not incident["active"]]
     active = [incident for incident in incidents if incident["active"]]
 
-    assert len(resolved) == 20
+    assert len(resolved) == 50
     assert len(active) == 10
     for incident in resolved:
         assert incident["state"] in RESOLVED_STATES
@@ -175,21 +177,45 @@ def test_resolved_and_active_consistency(incidents) -> None:
         _utc_timestamp(incident["opened_at"])
 
 
-def test_every_cluster_has_two_histories_and_one_active_case(incidents) -> None:
+def test_every_cluster_has_five_histories_and_one_active_case(incidents) -> None:
     cluster_counts = Counter(_cluster_tag(incident) for incident in incidents)
 
     assert set(cluster_counts) == EXPECTED_CLUSTERS
-    assert set(cluster_counts.values()) == {3}
+    assert set(cluster_counts.values()) == {6}
     for cluster in EXPECTED_CLUSTERS:
         members = [incident for incident in incidents if _cluster_tag(incident) == cluster]
-        assert sum(not incident["active"] for incident in members) == 2
+        assert sum(not incident["active"] for incident in members) == 5
         assert sum(incident["active"] for incident in members) == 1
-        assert len({incident["short_description"] for incident in members}) == 3
+        assert len({incident["short_description"] for incident in members}) == 6
         assert all(
             len(incident["root_cause"]) >= 40 and len(incident["resolution"]) >= 40
             for incident in members
             if not incident["active"]
         )
+
+
+def test_original_thirty_records_remain_stable(incidents) -> None:
+    canonical = json.dumps(
+        incidents[:30],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+
+    assert hashlib.sha256(canonical).hexdigest() == EXISTING_RECORDS_DIGEST
+
+
+def test_new_records_add_three_distinct_resolved_histories_per_cluster(incidents) -> None:
+    new_records = incidents[30:]
+    new_cluster_counts = Counter(_cluster_tag(incident) for incident in new_records)
+
+    assert len(new_records) == 30
+    assert set(new_cluster_counts) == EXPECTED_CLUSTERS
+    assert set(new_cluster_counts.values()) == {3}
+    assert all(not incident["active"] for incident in new_records)
+    assert all(incident["state"] in RESOLVED_STATES for incident in new_records)
+    assert len({incident["root_cause"] for incident in new_records}) == 30
+    assert len({incident["resolution"] for incident in new_records}) == 30
 
 
 def test_outbound_demo_ticket_has_multiple_plausible_historical_matches(incidents) -> None:

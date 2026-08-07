@@ -40,6 +40,10 @@ The expected mapping is declared near the top of the script:
 | Closed | 7 |
 
 The run fails before writes if the current PDI mapping is missing, ambiguous, or different.
+The loader also resolves active category and subcategory choices. Unsupported demo categories fall
+back to the active generic `Inquiry / Help` category, unsupported subcategories remain empty, and
+priority is left to ServiceNow's impact/urgency calculation. Resolved and closed terminal states are
+treated as equivalent during idempotency comparison.
 
 ## ServiceNow seeding workflow
 
@@ -109,7 +113,7 @@ Then synchronize and independently verify the resulting memories:
 .venv\Scripts\python scripts\sync_resolved_incidents.py --verify-only
 ```
 
-The script always skips active records, even when `--limit` is used. It maps the 20 resolved records
+The script always skips active records, even when `--limit` is used. It maps the 50 resolved records
 to the existing incident contract with scope `servicenow-dev`, a service derived from `cmdb_ci`, a
 development environment unless reviewed data indicates another environment, and an allowlisted
 metadata object.
