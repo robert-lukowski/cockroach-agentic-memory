@@ -1,6 +1,7 @@
 """Focused tests for frontend rendering behavior."""
 
 from contextlib import nullcontext
+from urllib.parse import urlsplit
 
 from frontend import ui_components
 from frontend.graph import build_operational_memory_graph
@@ -34,6 +35,102 @@ def test_recommendation_is_rendered_in_full(monkeypatch) -> None:
     ui_components.render_recommendation(_result(recommendation=recommendation))
 
     assert rendered == [recommendation]
+
+
+def test_demo_corpus_summary_uses_verified_static_counts(monkeypatch) -> None:
+    metrics: list[tuple[str, str]] = []
+    headings: list[str] = []
+    captions: list[str] = []
+
+    class MetricColumn:
+        def metric(self, label: str, value: str) -> None:
+            metrics.append((label, value))
+
+    monkeypatch.setattr(ui_components.st, "subheader", headings.append)
+    monkeypatch.setattr(
+        ui_components.st,
+        "columns",
+        lambda count: [MetricColumn() for _ in range(count)],
+    )
+    monkeypatch.setattr(ui_components.st, "caption", captions.append)
+
+    ui_components.render_demo_corpus_summary()
+
+    assert headings == ["Demo Operational Memory"]
+    assert metrics == [
+        ("ServiceNow Incidents", "60"),
+        ("Resolved Memories", "50"),
+        ("Active Scenarios", "10"),
+        ("Top-K Evidence", "5"),
+    ]
+    assert captions == ["Static demo corpus used by the current hackathon environment."]
+
+
+def test_investigation_explanation_is_architecturally_accurate(monkeypatch) -> None:
+    headings: list[str] = []
+    markdown: list[str] = []
+    captions: list[str] = []
+    links: list[tuple[str, str, bool]] = []
+
+    class LinkColumn:
+        def link_button(
+            self,
+            label: str,
+            url: str,
+            *,
+            use_container_width: bool,
+        ) -> None:
+            links.append((label, url, use_container_width))
+
+    monkeypatch.setattr(ui_components.st, "subheader", headings.append)
+    monkeypatch.setattr(ui_components.st, "markdown", markdown.append)
+    monkeypatch.setattr(ui_components.st, "caption", captions.append)
+    monkeypatch.setattr(ui_components.st, "columns", lambda _count: [LinkColumn(), LinkColumn()])
+
+    ui_components.render_investigation_explanation()
+
+    rendered = "\n".join(markdown + captions)
+    assert headings == ["What just happened?"]
+    assert "Titan" in rendered
+    assert "CockroachDB" in rendered
+    assert "validated" in rendered.lower()
+    assert "Bedrock" in rendered
+    assert "not live per-stage telemetry" in rendered
+    assert "does not connect directly" in rendered
+    assert "Bedrock does not choose SQL, scope, or IDs" in rendered
+    assert "active incident was not stored" in rendered
+    assert links == [
+        (
+            "View Architecture on GitHub",
+            ui_components.ARCHITECTURE_GITHUB_URL,
+            True,
+        ),
+        (
+            "View Automation on GitHub",
+            ui_components.AUTOMATION_GITHUB_URL,
+            True,
+        ),
+    ]
+
+
+def test_verification_links_are_public_navigation_without_credentials() -> None:
+    assert ui_components.ARCHITECTURE_GITHUB_URL == (
+        "https://github.com/robert-lukowski/cockroach-agentic-memory#architecture"
+    )
+    assert ui_components.AUTOMATION_GITHUB_URL == (
+        "https://github.com/robert-lukowski/cockroach-agentic-memory/"
+        "actions/workflows/generate-demo-incident.yml"
+    )
+    for url in (
+        ui_components.ARCHITECTURE_GITHUB_URL,
+        ui_components.AUTOMATION_GITHUB_URL,
+    ):
+        parsed = urlsplit(url)
+        assert parsed.scheme == "https"
+        assert parsed.hostname == "github.com"
+        assert parsed.username is None
+        assert parsed.password is None
+        assert parsed.query == ""
 
 
 def test_client_round_trip_is_rendered_once_and_not_mixed_with_backend_timings(

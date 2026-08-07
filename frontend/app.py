@@ -25,6 +25,8 @@ from frontend.models import (  # noqa: E402
     normalize_analysis_response,
 )
 from frontend.ui_components import (  # noqa: E402
+    render_demo_corpus_summary,
+    render_investigation_explanation,
     render_metrics,
     render_operational_memory_graph,
     render_recommendation,
@@ -83,6 +85,7 @@ def main() -> None:
         "Investigate active incidents using resolved operational memory from CockroachDB and "
         "grounded recommendations from Amazon Bedrock."
     )
+    render_demo_corpus_summary()
     _initialize_form()
     scenario_options = {"custom": "Custom incident"} | {
         scenario.key: scenario.label for scenario in DEMO_SCENARIOS
@@ -169,6 +172,7 @@ def main() -> None:
     )
     render_metrics(result, round_trip_ms=api_result.round_trip_ms)
     render_recommendation(result)
+    render_investigation_explanation()
     render_operational_memory_graph(
         result,
         current_incident_number=incident_number,

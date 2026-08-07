@@ -11,6 +11,28 @@ from frontend.graph import GraphNode, OperationalMemoryGraph, build_operational_
 from frontend.models import AnalysisResult, format_milliseconds, format_percentage
 from frontend.security_controls import VERIFIED_SECURITY_CONTROLS
 
+DEMO_CORPUS_METRICS = (
+    ("ServiceNow Incidents", 60),
+    ("Resolved Memories", 50),
+    ("Active Scenarios", 10),
+    ("Top-K Evidence", 5),
+)
+ARCHITECTURE_GITHUB_URL = (
+    "https://github.com/robert-lukowski/cockroach-agentic-memory#architecture"
+)
+AUTOMATION_GITHUB_URL = (
+    "https://github.com/robert-lukowski/cockroach-agentic-memory/"
+    "actions/workflows/generate-demo-incident.yml"
+)
+
+
+def render_demo_corpus_summary() -> None:
+    st.subheader("Demo Operational Memory")
+    columns = st.columns(len(DEMO_CORPUS_METRICS))
+    for column, (label, value) in zip(columns, DEMO_CORPUS_METRICS, strict=True):
+        column.metric(label, str(value))
+    st.caption("Static demo corpus used by the current hackathon environment.")
+
 
 def render_metrics(result: AnalysisResult, *, round_trip_ms: float) -> None:
     columns = st.columns(4)
@@ -28,6 +50,41 @@ def render_transient_retry_status(*, transient_retry_occurred: bool) -> None:
 def render_recommendation(result: AnalysisResult) -> None:
     st.subheader("Recommendation")
     st.text(result.recommendation)
+
+
+def render_investigation_explanation() -> None:
+    st.subheader("What just happened?")
+    st.markdown(
+        "**Current Incident** → **Titan Embedding** → **CockroachDB Retrieval** → "
+        "**Validated Top-5 Evidence** → **Bedrock Recommendation**"
+    )
+    st.markdown(
+        "1. Current incident symptoms were converted into a Titan embedding.\n"
+        "2. CockroachDB searched the resolved operational-memory corpus for semantically "
+        "similar incidents.\n"
+        "3. The application selected and validated up to 5 historical resolved memories.\n"
+        "4. Only the controlled current symptoms and validated historical evidence were "
+        "provided to Amazon Bedrock.\n"
+        "5. Bedrock generated the grounded diagnosis and recommended actions shown above."
+    )
+    st.caption("Architecture explanation — not live per-stage telemetry.")
+    st.caption(
+        "Trust boundary: Streamlit calls the application API; it does not connect directly to "
+        "CockroachDB or Bedrock. The application owns the memory scope, fixed retrieval, evidence "
+        "validation, and returned incident IDs. Bedrock does not choose SQL, scope, or IDs. Only "
+        "resolved or closed incidents become memory; this active incident was not stored."
+    )
+    architecture, automation = st.columns(2)
+    architecture.link_button(
+        "View Architecture on GitHub",
+        ARCHITECTURE_GITHUB_URL,
+        use_container_width=True,
+    )
+    automation.link_button(
+        "View Automation on GitHub",
+        AUTOMATION_GITHUB_URL,
+        use_container_width=True,
+    )
 
 
 def render_timings(result: AnalysisResult) -> None:
