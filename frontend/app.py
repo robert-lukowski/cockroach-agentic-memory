@@ -26,6 +26,7 @@ from frontend.models import (  # noqa: E402
 )
 from frontend.ui_components import (  # noqa: E402
     render_metrics,
+    render_operational_memory_graph,
     render_recommendation,
     render_supporting_incidents,
     render_timings,
@@ -163,7 +164,12 @@ def main() -> None:
     st.divider()
     render_metrics(result, round_trip_ms=api_result.round_trip_ms)
     render_recommendation(result)
-    render_timings(result, round_trip_ms=api_result.round_trip_ms)
+    render_operational_memory_graph(
+        result,
+        current_incident_number=incident_number,
+        current_service=service,
+    )
+    render_timings(result)
     render_supporting_incidents(result)
 
 

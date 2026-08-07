@@ -2,6 +2,8 @@
 
 This Streamlit application calls the existing API-key-protected `POST /servicenow/analyze`
 endpoint. It does not connect directly to AWS, Bedrock, Managed MCP, CockroachDB, or ServiceNow.
+Rich investigation responses are visualized as a star-shaped Operational Memory Graph containing
+only the current incident and the historical incidents actually returned by vector retrieval.
 
 ## Local setup
 

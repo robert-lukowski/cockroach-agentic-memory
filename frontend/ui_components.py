@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from html import escape
+
+import plotly.graph_objects as go
 import streamlit as st
 
+from frontend.graph import GraphNode, OperationalMemoryGraph, build_operational_memory_graph
 from frontend.models import AnalysisResult, format_milliseconds, format_percentage
 
 
@@ -12,11 +16,7 @@ def render_metrics(result: AnalysisResult, *, round_trip_ms: float) -> None:
     columns[0].metric("Best semantic match", format_percentage(result.best_similarity))
     columns[1].metric("Supporting incidents", str(result.supporting_count))
     columns[2].metric("Confidence", format_percentage(result.confidence))
-    backend_total = result.timings.get("total_request_ms")
-    columns[3].metric(
-        "Total response time" if backend_total is not None else "Client round trip",
-        format_milliseconds(backend_total if backend_total is not None else round_trip_ms),
-    )
+    columns[3].metric("Client round trip", format_milliseconds(round_trip_ms))
 
 
 def render_recommendation(result: AnalysisResult) -> None:
@@ -24,9 +24,8 @@ def render_recommendation(result: AnalysisResult) -> None:
     st.text(result.recommendation)
 
 
-def render_timings(result: AnalysisResult, *, round_trip_ms: float) -> None:
+def render_timings(result: AnalysisResult) -> None:
     if not result.timings:
-        st.caption(f"Client round trip: {format_milliseconds(round_trip_ms)}")
         return
     labels = {
         "vector_retrieval_ms": "Vector retrieval",
@@ -37,7 +36,110 @@ def render_timings(result: AnalysisResult, *, round_trip_ms: float) -> None:
         for key, label in labels.items():
             if key in result.timings:
                 st.write(f"{label}: {format_milliseconds(result.timings[key])}")
-        st.caption(f"Client round trip: {format_milliseconds(round_trip_ms)}")
+
+
+def _node_hover(node: GraphNode) -> str:
+    lines = [f"<b>{escape(node.label)}</b>", f"Service: {escape(node.service)}"]
+    if node.similarity is not None:
+        lines.append(f"Semantic similarity: {node.similarity:.1%}")
+    if node.root_cause:
+        lines.append(f"Root cause: {escape(node.root_cause)}")
+    if node.resolution:
+        lines.append(f"Resolution: {escape(node.resolution)}")
+    return "<br>".join(lines)
+
+
+def build_operational_memory_figure(graph: OperationalMemoryGraph) -> go.Figure:
+    """Render normalized graph data without deriving new relationships."""
+    positions = {node.node_id: node for node in graph.nodes}
+    figure = go.Figure()
+    for edge in graph.edges:
+        source = positions[edge.source_id]
+        target = positions[edge.target_id]
+        similarity = edge.similarity
+        width = 1.5 if similarity is None else 1.5 + (3.5 * similarity)
+        opacity = 0.35 if similarity is None else 0.35 + (0.55 * similarity)
+        figure.add_trace(
+            go.Scatter(
+                x=[source.x, target.x],
+                y=[source.y, target.y],
+                mode="lines",
+                line={"width": width, "color": f"rgba(56,189,248,{opacity:.3f})"},
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+
+    current_nodes = [node for node in graph.nodes if node.is_current]
+    historical_nodes = [node for node in graph.nodes if not node.is_current]
+    for nodes, color, size in (
+        (historical_nodes, "#38BDF8", 23),
+        (current_nodes, "#F97316", 31),
+    ):
+        if not nodes:
+            continue
+        figure.add_trace(
+            go.Scatter(
+                x=[node.x for node in nodes],
+                y=[node.y for node in nodes],
+                mode="markers+text",
+                text=[node.label for node in nodes],
+                textposition="bottom center",
+                textfont={"color": "#E5E7EB", "size": 12},
+                hovertext=[_node_hover(node) for node in nodes],
+                hoverinfo="text",
+                marker={
+                    "size": size,
+                    "color": color,
+                    "line": {"width": 2, "color": "#E5E7EB"},
+                },
+                showlegend=False,
+            )
+        )
+    figure.update_layout(
+        height=460,
+        margin={"l": 20, "r": 20, "t": 20, "b": 35},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        hoverlabel={"bgcolor": "#151D31", "font": {"color": "#E5E7EB"}},
+        xaxis={"visible": False, "range": [-1.35, 1.35], "fixedrange": True},
+        yaxis={"visible": False, "range": [-1.35, 1.35], "fixedrange": True},
+        showlegend=False,
+    )
+    return figure
+
+
+def render_operational_memory_graph(
+    result: AnalysisResult,
+    *,
+    current_incident_number: str,
+    current_service: str,
+) -> None:
+    st.subheader("Operational Memory Graph")
+    st.caption(
+        "Semantic links from the current incident to resolved operational memory retrieved "
+        "from CockroachDB."
+    )
+    graph = build_operational_memory_graph(
+        result,
+        current_incident_number=current_incident_number,
+        current_service=current_service,
+    )
+    if graph.state == "legacy":
+        st.info(
+            "Graph visualization requires structured historical memory; legacy incident IDs "
+            "remain available below."
+        )
+        return
+    if graph.state == "empty":
+        st.info("No supporting operational memory is available to visualize.")
+        return
+    st.plotly_chart(
+        build_operational_memory_figure(graph),
+        width="stretch",
+        theme=None,
+        config={"displayModeBar": False, "scrollZoom": False},
+    )
 
 
 def render_supporting_incidents(result: AnalysisResult) -> None:
