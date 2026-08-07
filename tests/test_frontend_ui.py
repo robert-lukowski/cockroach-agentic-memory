@@ -92,7 +92,49 @@ def test_plotly_figure_uses_similarity_and_escapes_hover_text() -> None:
 
     assert len(figure.data) == 3
     assert abs(figure.data[0].line.width - 4.3) < 1e-9
-    historical_hover = figure.data[1].hovertext[0]
+    assert [trace.name for trace in figure.data[1:]] == [
+        "Current Incident",
+        "Resolved Memory",
+    ]
+    assert all(trace.showlegend for trace in figure.data[1:])
+    assert figure.data[1].text[0] == (
+        "INC9000030<br>Current Incident<br>current-service"
+    )
+    assert figure.data[2].text[0] == "INC9000016<br>synthetic &lt;service&gt;"
+    historical_hover = figure.data[2].hovertext[0]
     assert "synthetic &lt;service&gt;" in historical_hover
     assert "Synthetic &lt;root cause&gt;" in historical_hover
     assert "synthetic <service>" not in historical_hover
+
+
+def test_current_incident_hover_contains_only_current_data() -> None:
+    incident = SupportingIncident(
+        incident_id="11111111-1111-4111-8111-111111111111",
+        incident_number="INC9000016",
+        service="historical-service",
+        similarity=0.8,
+        root_cause="Historical root cause.",
+        resolution="Historical resolution.",
+    )
+    result = AnalysisResult(
+        recommendation="Inspect the retrieved operational memory.",
+        confidence=None,
+        timings={},
+        supporting_incidents=(incident,),
+        legacy_incident_ids=(),
+    )
+    graph = build_operational_memory_graph(
+        result,
+        current_incident_number="INC9000030",
+        current_service="current-service",
+    )
+
+    figure = ui_components.build_operational_memory_figure(graph)
+
+    current_hover = figure.data[1].hovertext[0]
+    assert "Current Incident" in current_hover
+    assert "INC9000030" in current_hover
+    assert "current-service" in current_hover
+    assert "Semantic similarity" not in current_hover
+    assert "Root cause" not in current_hover
+    assert "Resolution" not in current_hover

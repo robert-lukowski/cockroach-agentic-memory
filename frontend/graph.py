@@ -15,6 +15,7 @@ GraphState = Literal["rich", "legacy", "empty"]
 class GraphNode:
     node_id: str
     label: str
+    identifier: str
     service: str
     x: float
     y: float
@@ -50,11 +51,18 @@ def build_operational_memory_graph(
         return OperationalMemoryGraph(state=state, nodes=(), edges=())
 
     current_id = "current-incident"
-    current_label = current_incident_number.strip() or "Current Incident"
+    current_number = current_incident_number.strip()
+    current_service_name = current_service.strip()
+    current_label = "\n".join(
+        part
+        for part in (current_number, "Current Incident", current_service_name)
+        if part
+    )
     current_node = GraphNode(
         node_id=current_id,
         label=current_label,
-        service=current_service.strip() or "unknown",
+        identifier=current_number,
+        service=current_service_name,
         x=0.0,
         y=0.0,
         is_current=True,
@@ -65,13 +73,18 @@ def build_operational_memory_graph(
     for index, incident in enumerate(result.supporting_incidents):
         angle = (math.pi / 2) - (2 * math.pi * index / count)
         node_id = f"historical-{index + 1}"
+        identifier = incident.display_identifier
+        label_service = incident.service.strip()
+        if label_service.lower() == "unknown":
+            label_service = ""
         historical_nodes.append(
             GraphNode(
                 node_id=node_id,
-                label=incident.display_identifier,
+                label="\n".join(part for part in (identifier, label_service) if part),
+                identifier=identifier,
                 service=incident.service,
-                x=math.cos(angle),
-                y=math.sin(angle),
+                x=1.15 * math.cos(angle),
+                y=1.15 * math.sin(angle),
                 is_current=False,
                 similarity=incident.similarity,
                 root_cause=incident.root_cause,

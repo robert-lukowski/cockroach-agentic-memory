@@ -39,7 +39,17 @@ def render_timings(result: AnalysisResult) -> None:
 
 
 def _node_hover(node: GraphNode) -> str:
-    lines = [f"<b>{escape(node.label)}</b>", f"Service: {escape(node.service)}"]
+    if node.is_current:
+        lines = ["<b>Current Incident</b>"]
+        if node.identifier:
+            lines.append(f"Incident: {escape(node.identifier)}")
+        if node.service:
+            lines.append(f"Service: {escape(node.service)}")
+        return "<br>".join(lines)
+
+    lines = [f"<b>{escape(node.identifier)}</b>"]
+    if node.service:
+        lines.append(f"Service: {escape(node.service)}")
     if node.similarity is not None:
         lines.append(f"Semantic similarity: {node.similarity:.1%}")
     if node.root_cause:
@@ -72,9 +82,9 @@ def build_operational_memory_figure(graph: OperationalMemoryGraph) -> go.Figure:
 
     current_nodes = [node for node in graph.nodes if node.is_current]
     historical_nodes = [node for node in graph.nodes if not node.is_current]
-    for nodes, color, size in (
-        (historical_nodes, "#38BDF8", 23),
-        (current_nodes, "#F97316", 31),
+    for nodes, color, size, name in (
+        (current_nodes, "#F97316", 31, "Current Incident"),
+        (historical_nodes, "#38BDF8", 23, "Resolved Memory"),
     ):
         if not nodes:
             continue
@@ -83,7 +93,7 @@ def build_operational_memory_figure(graph: OperationalMemoryGraph) -> go.Figure:
                 x=[node.x for node in nodes],
                 y=[node.y for node in nodes],
                 mode="markers+text",
-                text=[node.label for node in nodes],
+                text=[escape(node.label).replace("\n", "<br>") for node in nodes],
                 textposition="bottom center",
                 textfont={"color": "#E5E7EB", "size": 12},
                 hovertext=[_node_hover(node) for node in nodes],
@@ -93,18 +103,28 @@ def build_operational_memory_figure(graph: OperationalMemoryGraph) -> go.Figure:
                     "color": color,
                     "line": {"width": 2, "color": "#E5E7EB"},
                 },
-                showlegend=False,
+                name=name,
+                showlegend=True,
             )
         )
     figure.update_layout(
-        height=460,
-        margin={"l": 20, "r": 20, "t": 20, "b": 35},
+        height=500,
+        margin={"l": 25, "r": 25, "t": 50, "b": 45},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         hoverlabel={"bgcolor": "#151D31", "font": {"color": "#E5E7EB"}},
-        xaxis={"visible": False, "range": [-1.35, 1.35], "fixedrange": True},
-        yaxis={"visible": False, "range": [-1.35, 1.35], "fixedrange": True},
-        showlegend=False,
+        xaxis={"visible": False, "range": [-1.55, 1.55], "fixedrange": True},
+        yaxis={"visible": False, "range": [-1.55, 1.55], "fixedrange": True},
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.01,
+            "xanchor": "right",
+            "x": 1.0,
+            "bgcolor": "rgba(0,0,0,0)",
+            "font": {"color": "#E5E7EB", "size": 11},
+        },
+        showlegend=True,
     )
     return figure
 

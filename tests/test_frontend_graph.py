@@ -68,23 +68,47 @@ def test_incident_number_is_preferred_and_similarity_is_preserved() -> None:
     )
 
     current, historical = graph.nodes
-    assert current.label == "INC9000003"
-    assert historical.label == "INC9000016"
-    assert historical.label != incident.incident_id
+    assert current.label == (
+        "INC9000003\nCurrent Incident\nconnect-outbound-orchestrator"
+    )
+    assert historical.label == "INC9000016\noutbound-orchestrator"
+    assert incident.incident_id not in historical.label
     assert historical.similarity == 0.82
     assert graph.edges[0].similarity == 0.82
 
 
-def test_graph_uses_safe_current_incident_fallbacks() -> None:
+def test_current_node_is_clearly_marked_without_duplicating_its_fallback() -> None:
     graph = build_operational_memory_graph(
         _result((_supporting_incident(1, None),)),
         current_incident_number=" ",
-        current_service=" ",
+        current_service="connect-outbound-orchestrator",
     )
 
-    assert graph.nodes[0].label == "Current Incident"
-    assert graph.nodes[0].service == "unknown"
+    assert graph.nodes[0].label == "Current Incident\nconnect-outbound-orchestrator"
+    assert graph.nodes[0].label.count("Current Incident") == 1
+    assert graph.nodes[0].identifier == ""
     assert graph.edges[0].similarity is None
+
+
+def test_missing_or_unknown_historical_service_is_omitted_from_node_label() -> None:
+    incident = _supporting_incident(1, 0.75)
+    for service in ("unknown", "", "  "):
+        incomplete_incident = SupportingIncident(
+            incident_id=incident.incident_id,
+            incident_number=incident.incident_number,
+            service=service,
+            similarity=incident.similarity,
+            root_cause=incident.root_cause,
+            resolution=incident.resolution,
+        )
+
+        graph = build_operational_memory_graph(
+            _result((incomplete_incident,)),
+            current_incident_number="INC9000030",
+            current_service="current-service",
+        )
+
+        assert graph.nodes[1].label == "INC9000001"
 
 
 def test_empty_result_has_no_invented_nodes_or_edges() -> None:
