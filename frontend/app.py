@@ -40,6 +40,7 @@ from frontend.ui_theme import (  # noqa: E402
     render_command_center_hero,
     render_memory_pipeline,
 )
+from frontend.video_background import render_background_video  # noqa: E402
 
 st.set_page_config(
     page_title="Agentic Incident Memory",
@@ -86,6 +87,7 @@ def _initialize_form() -> None:
 
 def main() -> None:
     apply_command_center_theme()
+    render_background_video()
     render_command_center_hero()
     render_demo_corpus_summary()
     render_memory_pipeline()
