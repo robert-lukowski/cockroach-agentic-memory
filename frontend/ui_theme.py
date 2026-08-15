@@ -132,7 +132,9 @@ div.stButton > button[kind="primary"]:hover {
 [data-testid="stPlotlyChart"] {
   border: 1px solid var(--aim-border);
   border-radius: 1rem;
-  background: rgba(7, 16, 31, 0.56);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(14, 165, 233, 0.06), transparent 48%),
+    rgba(7, 16, 31, 0.56);
   padding: 0.35rem;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 14px 38px rgba(0, 0, 0, 0.16);
 }
@@ -279,6 +281,137 @@ hr {
   font-size: 1.05rem;
 }
 
+/* Recommendation is the product's primary value, so give it visual priority. */
+.aim-recommendation {
+  position: relative;
+  overflow: hidden;
+  margin: 0.25rem 0 1.1rem;
+  padding: 1.35rem 1.45rem 1.25rem;
+  border: 1px solid rgba(56, 189, 248, 0.30);
+  border-radius: 1.1rem;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(56, 189, 248, 0.13), transparent 30%),
+    linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(8, 17, 32, 0.92));
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.aim-recommendation:hover {
+  border-color: rgba(56, 189, 248, 0.52);
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.27), 0 0 34px rgba(14, 165, 233, 0.05);
+}
+
+.aim-recommendation::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 1rem;
+  bottom: 1rem;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #38BDF8, #2563EB, #F97316);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.28);
+}
+
+.aim-rec-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.aim-rec-eyebrow,
+.aim-graph-kicker {
+  color: #7DD3FC;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.aim-rec-title {
+  margin-top: 0.2rem;
+  color: #F8FAFC;
+  font-size: 1.18rem;
+  font-weight: 780;
+  letter-spacing: -0.025em;
+}
+
+.aim-rec-badge {
+  flex: 0 0 auto;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 999px;
+  background: rgba(22, 101, 52, 0.16);
+  color: #BBF7D0;
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.aim-rec-body {
+  color: #E2E8F0;
+  font-size: 0.97rem;
+  line-height: 1.68;
+  white-space: normal;
+}
+
+.aim-rec-provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.15rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.aim-provenance-pill {
+  display: inline-flex;
+  padding: 0.34rem 0.58rem;
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.07);
+  color: #BAE6FD;
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+/* A compact bridge between retrieval metrics and the interactive graph. */
+.aim-graph-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.35rem 0 0.7rem;
+  padding: 0.78rem 0.9rem;
+  border: 1px solid rgba(56, 189, 248, 0.17);
+  border-radius: 0.85rem;
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.aim-graph-context strong {
+  display: block;
+  margin-top: 0.1rem;
+  color: #F8FAFC;
+  font-size: 0.94rem;
+}
+
+.aim-graph-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.aim-graph-stats span {
+  padding: 0.32rem 0.52rem;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.08);
+  color: #CBD5E1;
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
 /* Respect OS accessibility preference. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -305,6 +438,14 @@ hr {
     top: auto;
     bottom: -0.65rem;
     transform: translate(50%, 50%);
+  }
+  .aim-rec-header,
+  .aim-graph-context {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .aim-graph-stats {
+    justify-content: flex-start;
   }
 }
 
