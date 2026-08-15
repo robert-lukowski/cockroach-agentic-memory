@@ -29,12 +29,29 @@ def test_recommendation_is_rendered_in_full(monkeypatch) -> None:
         f"{index}. Complete synthetic action {index}." for index in range(1, 41)
     )
     rendered: list[str] = []
-    monkeypatch.setattr(ui_components.st, "subheader", lambda _label: None)
-    monkeypatch.setattr(ui_components.st, "text", rendered.append)
+    headings: list[str] = []
+    monkeypatch.setattr(ui_components.st, "subheader", headings.append)
+    monkeypatch.setattr(ui_components.st, "html", rendered.append)
 
     ui_components.render_recommendation(_result(recommendation=recommendation))
 
-    assert rendered == [recommendation]
+    assert headings == ["Recommendation"]
+    assert len(rendered) == 1
+    assert "Diagnosis" in rendered[0]
+    assert "1. Complete synthetic action 1." in rendered[0]
+    assert "40. Complete synthetic action 40." in rendered[0]
+    assert "Bedrock Recommendation" in rendered[0]
+    assert "CockroachDB memory" in rendered[0]
+
+
+def test_recommendation_html_escapes_model_output() -> None:
+    html = ui_components._recommendation_html(
+        _result(recommendation="Diagnosis\n<script>alert('synthetic')</script>")
+    )
+
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+    assert "Diagnosis<br>" in html
 
 
 def test_demo_corpus_summary_uses_verified_static_counts(monkeypatch) -> None:
@@ -206,6 +223,8 @@ def test_plotly_figure_uses_similarity_and_escapes_hover_text() -> None:
         "Resolved Memory",
     ]
     assert all(trace.showlegend for trace in figure.data[1:])
+    assert figure.data[1].marker.symbol == "diamond"
+    assert figure.data[2].marker.symbol == "circle"
     assert figure.data[1].text[0] == (
         "INC9000030<br>Current Incident<br>current-service"
     )
