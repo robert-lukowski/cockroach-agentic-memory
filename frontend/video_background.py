@@ -28,8 +28,8 @@ def render_background_video() -> None:
         <style>
           /*
            * Use Streamlit's native video element instead of static-file serving.
-           * MP4 isn't on Streamlit's static-serving allow-list and is otherwise
-           * returned as text/plain with nosniff, which browsers correctly reject.
+           * Keep the motion clearly visible on bright displays while preserving
+           * enough contrast for the command-center content above it.
            */
           .st-key-aim_ambient_video {
             position: fixed !important;
@@ -62,8 +62,8 @@ def render_background_video() -> None:
             width: 100vw !important;
             height: 100vh !important;
             object-fit: cover !important;
-            opacity: 0.14 !important;
-            filter: brightness(0.46) saturate(0.62) contrast(1.08) !important;
+            opacity: 0.22 !important;
+            filter: brightness(0.72) saturate(0.72) contrast(1.05) !important;
             transform: scale(1.025);
             pointer-events: none !important;
           }
@@ -81,10 +81,10 @@ def render_background_video() -> None:
             z-index: 2;
           }
 
-          /* Keep ambient motion on mobile too, but make it slightly quieter. */
+          /* Keep ambient motion visible on mobile, but slightly quieter than desktop. */
           @media (max-width: 900px) {
             .st-key-aim_ambient_video video {
-              opacity: 0.10 !important;
+              opacity: 0.16 !important;
               transform: scale(1.05);
             }
           }
