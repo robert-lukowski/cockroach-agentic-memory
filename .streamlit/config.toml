@@ -4,6 +4,10 @@ primaryColor = "#38BDF8"
 backgroundColor = "#0B1020"
 secondaryBackgroundColor = "#151D31"
 textColor = "#E5E7EB"
+borderColor = "#26344D"
+baseRadius = "large"
+buttonRadius = "full"
+showWidgetBorder = true
 
 [server]
 headless = true
