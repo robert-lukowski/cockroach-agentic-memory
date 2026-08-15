@@ -2,59 +2,96 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
-BACKGROUND_VIDEO_URL = "/app/static/tlo-dashboard.mp4"
+BACKGROUND_VIDEO_PATH = Path(__file__).resolve().parent / "static" / "tlo-dashboard.mp4"
 
 
 def render_background_video() -> None:
-    """Render a low-opacity, non-interactive background video behind the UI."""
+    """Render the local MP4 through Streamlit's native media pipeline and pin it behind the UI."""
+    if not BACKGROUND_VIDEO_PATH.exists():
+        return
+
+    with st.container(key="aim_ambient_video"):
+        st.video(
+            str(BACKGROUND_VIDEO_PATH),
+            format="video/mp4",
+            autoplay=True,
+            muted=True,
+            loop=True,
+        )
+
     st.html(
-        f"""
-        <div class="aim-video-layer" aria-hidden="true">
-          <video autoplay muted loop playsinline preload="metadata" tabindex="-1">
-            <source src="{BACKGROUND_VIDEO_URL}" type="video/mp4">
-          </video>
-        </div>
+        """
         <style>
-          .aim-video-layer {{
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-            overflow: hidden;
-            pointer-events: none;
-            user-select: none;
-          }}
+          /*
+           * Use Streamlit's native video element instead of static-file serving.
+           * MP4 isn't on Streamlit's static-serving allow-list and is otherwise
+           * returned as text/plain with nosniff, which browsers correctly reject.
+           */
+          .st-key-aim_ambient_video {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+            user-select: none !important;
+          }
 
-          .aim-video-layer video {{
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            opacity: 0.12;
-            filter: brightness(0.48) saturate(0.60) contrast(1.08);
+          .st-key-aim_ambient_video [data-testid="stVideo"] {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .st-key-aim_ambient_video [data-testid="stVideo"] > div {
+            width: 100% !important;
+            height: 100% !important;
+          }
+
+          .st-key-aim_ambient_video video {
+            width: 100vw !important;
+            height: 100vh !important;
+            object-fit: cover !important;
+            opacity: 0.14 !important;
+            filter: brightness(0.46) saturate(0.62) contrast(1.08) !important;
             transform: scale(1.025);
-          }}
+            pointer-events: none !important;
+          }
 
-          [data-testid="stAppViewContainer"]::before {{
+          .st-key-aim_ambient_video video::-webkit-media-controls {
+            display: none !important;
+          }
+
+          [data-testid="stAppViewContainer"]::before {
             z-index: 1;
-          }}
+          }
 
-          [data-testid="stMainBlockContainer"] {{
+          [data-testid="stMainBlockContainer"] {
             position: relative;
             z-index: 2;
-          }}
+          }
 
-          @media (max-width: 900px) {{
-            .aim-video-layer {{
-              display: none;
-            }}
-          }}
+          @media (max-width: 900px) {
+            .st-key-aim_ambient_video {
+              display: none !important;
+            }
+          }
 
-          @media (prefers-reduced-motion: reduce) {{
-            .aim-video-layer {{
-              display: none;
-            }}
-          }}
+          @media (prefers-reduced-motion: reduce) {
+            .st-key-aim_ambient_video {
+              display: none !important;
+            }
+          }
         </style>
         """
     )
