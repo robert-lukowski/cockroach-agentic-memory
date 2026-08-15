@@ -81,9 +81,11 @@ def render_background_video() -> None:
             z-index: 2;
           }
 
+          /* Keep ambient motion on mobile too, but make it slightly quieter. */
           @media (max-width: 900px) {
-            .st-key-aim_ambient_video {
-              display: none !important;
+            .st-key-aim_ambient_video video {
+              opacity: 0.10 !important;
+              transform: scale(1.05);
             }
           }
 
