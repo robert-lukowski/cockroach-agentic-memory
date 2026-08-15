@@ -35,10 +35,15 @@ from frontend.ui_components import (  # noqa: E402
     render_transient_retry_status,
     render_verified_security_controls,
 )
+from frontend.ui_theme import (  # noqa: E402
+    apply_command_center_theme,
+    render_command_center_hero,
+    render_memory_pipeline,
+)
 
 st.set_page_config(
-    page_title="Agentic Incident Command Center",
-    page_icon="🚨",
+    page_title="Agentic Incident Memory",
+    page_icon="🧠",
     layout="wide",
 )
 
@@ -80,13 +85,18 @@ def _initialize_form() -> None:
 
 
 def main() -> None:
-    st.title("Agentic Incident Command Center")
-    st.caption(
-        "Investigate active incidents using resolved operational memory from CockroachDB and "
-        "grounded recommendations from Amazon Bedrock."
-    )
+    apply_command_center_theme()
+    render_command_center_hero()
     render_demo_corpus_summary()
+    render_memory_pipeline()
     _initialize_form()
+
+    st.subheader("Investigate an active incident")
+    st.caption(
+        "Load a synthetic scenario or enter your own incident. The active incident is used for "
+        "retrieval only and is not written into trusted operational memory."
+    )
+
     scenario_options = {"custom": "Custom incident"} | {
         scenario.key: scenario.label for scenario in DEMO_SCENARIOS
     }
@@ -123,7 +133,7 @@ def main() -> None:
             max_chars=40,
         )
         submitted = st.form_submit_button(
-            "Run Agentic Investigation",
+            "⚡ Run Agentic Investigation",
             type="primary",
             use_container_width=True,
         )
