@@ -1,0 +1,47 @@
+name: Import H1 background asset
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/video-background
+    paths:
+      - .github/workflows/import-h1-background.yml
+
+permissions:
+  contents: write
+
+jobs:
+  import-background:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/video-background
+
+      - name: Download verified H1 background asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p static
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/robert-lukowski/H1/main/video/tlo-dashboard.mp4" \
+            --output static/tlo-dashboard.mp4
+          test -s static/tlo-dashboard.mp4
+          echo "Imported background size: $(stat -c%s static/tlo-dashboard.mp4) bytes"
+          sha256sum static/tlo-dashboard.mp4
+
+      - name: Commit background asset to feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add static/tlo-dashboard.mp4
+          if git diff --cached --quiet; then
+            echo "Background asset already matches the H1 source."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(ui): import H1 dashboard background video"
+          git push origin HEAD:feature/video-background
