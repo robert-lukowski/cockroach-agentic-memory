@@ -47,9 +47,32 @@ def render_transient_retry_status(*, transient_retry_occurred: bool) -> None:
         st.info("Transient backend dependency failure detected. Automatic retry succeeded.")
 
 
+def _recommendation_html(result: AnalysisResult) -> str:
+    safe_recommendation = escape(result.recommendation).replace("\n", "<br>")
+    confidence = format_percentage(result.confidence)
+    supporting = str(result.supporting_count)
+    return f"""
+    <section class="aim-recommendation" aria-label="Grounded Bedrock recommendation">
+      <div class="aim-rec-header">
+        <div>
+          <div class="aim-rec-eyebrow">Grounded analysis output</div>
+          <div class="aim-rec-title">Bedrock Recommendation</div>
+        </div>
+        <div class="aim-rec-badge">Validated evidence</div>
+      </div>
+      <div class="aim-rec-body">{safe_recommendation}</div>
+      <div class="aim-rec-provenance" aria-label="Recommendation provenance">
+        <span class="aim-provenance-pill">CockroachDB memory</span>
+        <span class="aim-provenance-pill">{supporting} supporting incidents</span>
+        <span class="aim-provenance-pill">Confidence {confidence}</span>
+      </div>
+    </section>
+    """
+
+
 def render_recommendation(result: AnalysisResult) -> None:
     st.subheader("Recommendation")
-    st.text(result.recommendation)
+    st.html(_recommendation_html(result))
 
 
 def render_investigation_explanation() -> None:
@@ -145,9 +168,9 @@ def build_operational_memory_figure(graph: OperationalMemoryGraph) -> go.Figure:
 
     current_nodes = [node for node in graph.nodes if node.is_current]
     historical_nodes = [node for node in graph.nodes if not node.is_current]
-    for nodes, color, size, name in (
-        (current_nodes, "#F97316", 31, "Current Incident"),
-        (historical_nodes, "#38BDF8", 23, "Resolved Memory"),
+    for nodes, color, size, symbol, border, name in (
+        (current_nodes, "#F97316", 35, "diamond", "#FED7AA", "Current Incident"),
+        (historical_nodes, "#38BDF8", 24, "circle", "#BAE6FD", "Resolved Memory"),
     ):
         if not nodes:
             continue
@@ -164,18 +187,25 @@ def build_operational_memory_figure(graph: OperationalMemoryGraph) -> go.Figure:
                 marker={
                     "size": size,
                     "color": color,
-                    "line": {"width": 2, "color": "#E5E7EB"},
+                    "symbol": symbol,
+                    "opacity": 0.96,
+                    "line": {"width": 2.2, "color": border},
                 },
                 name=name,
                 showlegend=True,
             )
         )
     figure.update_layout(
-        height=500,
-        margin={"l": 25, "r": 25, "t": 50, "b": 45},
+        height=520,
+        margin={"l": 25, "r": 25, "t": 58, "b": 48},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        hoverlabel={"bgcolor": "#151D31", "font": {"color": "#E5E7EB"}},
+        font={"family": "Inter, ui-sans-serif, system-ui", "color": "#E5E7EB"},
+        hoverlabel={
+            "bgcolor": "#0F172A",
+            "bordercolor": "#38BDF8",
+            "font": {"color": "#F8FAFC", "size": 12},
+        },
         xaxis={"visible": False, "range": [-1.55, 1.55], "fixedrange": True},
         yaxis={"visible": False, "range": [-1.55, 1.55], "fixedrange": True},
         legend={
@@ -185,11 +215,26 @@ def build_operational_memory_figure(graph: OperationalMemoryGraph) -> go.Figure:
             "xanchor": "right",
             "x": 1.0,
             "bgcolor": "rgba(0,0,0,0)",
-            "font": {"color": "#E5E7EB", "size": 11},
+            "font": {"color": "#CBD5E1", "size": 11},
         },
         showlegend=True,
     )
     return figure
+
+
+def _memory_graph_context_html(result: AnalysisResult) -> str:
+    return f"""
+    <div class="aim-graph-context" aria-label="Operational memory retrieval summary">
+      <div>
+        <span class="aim-graph-kicker">CockroachDB retrieval</span>
+        <strong>Evidence map</strong>
+      </div>
+      <div class="aim-graph-stats">
+        <span>{result.supporting_count} memories</span>
+        <span>Best match {format_percentage(result.best_similarity)}</span>
+      </div>
+    </div>
+    """
 
 
 def render_operational_memory_graph(
@@ -217,6 +262,7 @@ def render_operational_memory_graph(
     if graph.state == "empty":
         st.info("No supporting operational memory is available to visualize.")
         return
+    st.html(_memory_graph_context_html(result))
     st.plotly_chart(
         build_operational_memory_figure(graph),
         width="stretch",
