@@ -24,19 +24,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p static
+          mkdir -p frontend/static
           curl --fail --location --retry 3 \
             "https://raw.githubusercontent.com/robert-lukowski/H1/main/video/tlo-dashboard.mp4" \
-            --output static/tlo-dashboard.mp4
-          test -s static/tlo-dashboard.mp4
-          echo "Imported background size: $(stat -c%s static/tlo-dashboard.mp4) bytes"
-          sha256sum static/tlo-dashboard.mp4
+            --output frontend/static/tlo-dashboard.mp4
+          test -s frontend/static/tlo-dashboard.mp4
+          echo "Imported background size: $(stat -c%s frontend/static/tlo-dashboard.mp4) bytes"
+          sha256sum frontend/static/tlo-dashboard.mp4
 
       - name: Commit background asset to feature branch
         shell: bash
         run: |
           set -euo pipefail
-          git add static/tlo-dashboard.mp4
+          git add frontend/static/tlo-dashboard.mp4
           if git diff --cached --quiet; then
             echo "Background asset already matches the H1 source."
             exit 0
