@@ -7,9 +7,10 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4, uuid5
 
-from incident_memory.errors import AdapterContractError
+from incident_memory.errors import AdapterContractError, ValidationError
 from incident_memory.models import (
     EMBEDDING_DIMENSIONS,
     IncidentCreateRequest,
@@ -46,6 +47,9 @@ class IncidentMemoryService:
         self._timer = timer
 
     def create_incident(self, request: IncidentCreateRequest) -> IncidentCreateResponse:
+        self._reject_sensitive_control(request.scope, field="scope")
+        if request.source_id is not None:
+            self._reject_sensitive_control(request.source_id, field="source_id")
         request = self._redacted_create_request(request)
         incident_id = (
             uuid5(_SOURCE_ID_NAMESPACE, request.source_id)
@@ -104,11 +108,68 @@ class IncidentMemoryService:
         """Prevent direct identifiers from becoming durable memory or embedding input."""
         return replace(
             request,
-            title=self._privacy_guard.redact(request.title).text,
-            symptoms=self._privacy_guard.redact(request.symptoms).text,
-            root_cause=self._privacy_guard.redact(request.root_cause).text,
-            resolution=self._privacy_guard.redact(request.resolution).text,
+            service=self._privacy_guard.redact_field(request.service, label="service").text,
+            environment=self._privacy_guard.redact_field(
+                request.environment,
+                label="environment",
+            ).text,
+            title=self._privacy_guard.redact_field(request.title, label="title").text,
+            symptoms=self._privacy_guard.redact_field(request.symptoms, label="symptoms").text,
+            root_cause=self._privacy_guard.redact_field(
+                request.root_cause,
+                label="root_cause",
+            ).text,
+            resolution=self._privacy_guard.redact_field(
+                request.resolution,
+                label="resolution",
+            ).text,
+            tags=tuple(self._privacy_guard.redact_field(tag).text for tag in request.tags),
+            metadata=self._redacted_metadata(request.metadata),
         )
+
+    def _redacted_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        """Recursively sanitize metadata values and reject sensitive metadata keys."""
+        sanitized: dict[str, Any] = {}
+        for key, value in metadata.items():
+            key_result = self._privacy_guard.redact_field(key)
+            if key_result.text != key:
+                raise ValidationError(
+                    "metadata keys must not contain direct identifiers.",
+                    details={"field": "metadata"},
+                )
+            sanitized[key] = self._redacted_metadata_value(value, label=key)
+        return sanitized
+
+    def _redacted_metadata_value(self, value: Any, *, label: str | None = None) -> Any:
+        if isinstance(value, str):
+            return self._privacy_guard.redact_field(value, label=label).text
+        if isinstance(value, list):
+            return [self._redacted_metadata_value(item, label=label) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self._redacted_metadata_value(item, label=label) for item in value)
+        if isinstance(value, dict):
+            nested: dict[str, Any] = {}
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    nested[key] = self._redacted_metadata_value(item)
+                    continue
+                key_result = self._privacy_guard.redact_field(key)
+                if key_result.text != key:
+                    raise ValidationError(
+                        "metadata keys must not contain direct identifiers.",
+                        details={"field": "metadata"},
+                    )
+                nested[key] = self._redacted_metadata_value(item, label=key)
+            return nested
+        return value
+
+    def _reject_sensitive_control(self, value: str, *, field: str) -> None:
+        """Reject identifiers in control-plane fields whose mutation would change semantics."""
+        if self._privacy_guard.redact_field(value, label=field).text != value:
+            raise ValidationError(
+                f"{field} must not contain direct identifiers.",
+                details={"field": field},
+            )
 
     @staticmethod
     def _matches(existing: StoredIncident, request: IncidentCreateRequest) -> bool:
@@ -126,11 +187,28 @@ class IncidentMemoryService:
 
     def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
         total_started = self._timer()
+        self._reject_sensitive_control(request.scope, field="scope")
 
         privacy_started = self._timer()
         protected = self._privacy_guard.protect_for_investigation(request.symptoms)
         privacy_guard_ms = (self._timer() - privacy_started) * 1_000
-        protected_request = replace(request, symptoms=protected.text)
+        protected_request = replace(
+            request,
+            symptoms=protected.text,
+            service=(
+                self._privacy_guard.redact_field(request.service, label="service").text
+                if request.service is not None
+                else None
+            ),
+            environment=(
+                self._privacy_guard.redact_field(
+                    request.environment,
+                    label="environment",
+                ).text
+                if request.environment is not None
+                else None
+            ),
+        )
 
         embedding = self._validated_embedding(
             self._bedrock.generate_embedding(protected_request.symptoms)
@@ -185,10 +263,35 @@ class IncidentMemoryService:
                     item,
                     incident=replace(
                         incident,
-                        title=self._privacy_guard.redact(incident.title).text,
-                        symptoms=self._privacy_guard.redact(incident.symptoms).text,
-                        root_cause=self._privacy_guard.redact(incident.root_cause).text,
-                        resolution=self._privacy_guard.redact(incident.resolution).text,
+                        service=self._privacy_guard.redact_field(
+                            incident.service,
+                            label="service",
+                        ).text,
+                        environment=self._privacy_guard.redact_field(
+                            incident.environment,
+                            label="environment",
+                        ).text,
+                        title=self._privacy_guard.redact_field(
+                            incident.title,
+                            label="title",
+                        ).text,
+                        symptoms=self._privacy_guard.redact_field(
+                            incident.symptoms,
+                            label="symptoms",
+                        ).text,
+                        root_cause=self._privacy_guard.redact_field(
+                            incident.root_cause,
+                            label="root_cause",
+                        ).text,
+                        resolution=self._privacy_guard.redact_field(
+                            incident.resolution,
+                            label="resolution",
+                        ).text,
+                        tags=tuple(
+                            self._privacy_guard.redact_field(tag).text
+                            for tag in incident.tags
+                        ),
+                        metadata=self._redacted_metadata(incident.metadata),
                     ),
                 )
             )
