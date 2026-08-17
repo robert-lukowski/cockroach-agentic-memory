@@ -62,8 +62,8 @@ def render_background_video() -> None:
             width: 100vw !important;
             height: 100vh !important;
             object-fit: cover !important;
-            opacity: 0.22 !important;
-            filter: brightness(0.72) saturate(0.72) contrast(1.05) !important;
+            opacity: 0.25 !important;
+            filter: brightness(0.82) saturate(0.78) contrast(1.03) !important;
             transform: scale(1.025);
             pointer-events: none !important;
           }
@@ -84,7 +84,7 @@ def render_background_video() -> None:
           /* Keep ambient motion visible on mobile, but slightly quieter than desktop. */
           @media (max-width: 900px) {
             .st-key-aim_ambient_video video {
-              opacity: 0.16 !important;
+              opacity: 0.18 !important;
               transform: scale(1.05);
             }
           }
