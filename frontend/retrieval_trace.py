@@ -6,14 +6,22 @@ from html import escape
 
 import streamlit as st
 
-from frontend.models import AnalysisResult, format_milliseconds, format_percentage
+from frontend.models import (
+    AnalysisResult,
+    PrivacyGuardResult,
+    format_milliseconds,
+    format_percentage,
+)
 
 _REQUESTED_TOP_K = 5
 _LINE_DELAY_MS = 90
 
 
 def _privacy_trace(result: AnalysisResult) -> tuple[str, str]:
-    guard = result.privacy_guard
+    # Streamlit Cloud can retain result objects created by a previous app version
+    # during hot reloads. Missing additive metadata must degrade to unavailable
+    # instead of crashing the full investigation result page.
+    guard = getattr(result, "privacy_guard", PrivacyGuardResult())
     if guard.status == "verified":
         details = (
             f"PASS · {guard.redactions} configured direct identifier(s) redacted · "
@@ -45,18 +53,20 @@ def _terminal_line(content: str, *, index: int, class_name: str = "") -> str:
 
 
 def _retrieval_trace_html(result: AnalysisResult) -> str:
-    retrieval_ms = result.timings.get("vector_retrieval_ms")
+    timings = getattr(result, "timings", {})
+    retrieval_ms = timings.get("vector_retrieval_ms") if isinstance(timings, dict) else None
     retrieval_time = (
         format_milliseconds(float(retrieval_ms))
         if isinstance(retrieval_ms, int | float) and not isinstance(retrieval_ms, bool)
         else "Not available"
     )
+    supporting_evidence_reported = getattr(result, "supporting_evidence_reported", False)
     returned = (
-        str(result.supporting_count)
-        if result.supporting_evidence_reported
+        str(getattr(result, "supporting_count", 0))
+        if supporting_evidence_reported
         else "Not available"
     )
-    best_similarity = format_percentage(result.best_similarity)
+    best_similarity = format_percentage(getattr(result, "best_similarity", None))
     privacy_detail, privacy_class = _privacy_trace(result)
 
     rows: list[tuple[str, str]] = [
