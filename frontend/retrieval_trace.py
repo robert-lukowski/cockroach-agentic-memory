@@ -14,7 +14,9 @@ from frontend.models import (
 )
 
 _REQUESTED_TOP_K = 5
-_LINE_DELAY_MS = 90
+_INITIAL_REPLAY_DELAY_MS = 900
+_LINE_DELAY_MS = 70
+_LINE_REVEAL_MS = 110
 
 
 def _privacy_trace(result: AnalysisResult) -> tuple[str, str]:
@@ -37,12 +39,15 @@ def _privacy_trace(result: AnalysisResult) -> tuple[str, str]:
         )
         return details, "warn"
     if guard.status == "not_available":
-        return "Not available in this response", "muted"
+        return "Not reported in this response", "muted"
     return f"REDACTION ENFORCED · {guard.redactions} field(s)", "warn"
 
 
 def _terminal_line(content: str, *, index: int, class_name: str = "") -> str:
-    delay_ms = index * _LINE_DELAY_MS
+    # Give Streamlit's rerun a short settle window before the first line appears.
+    # The browser then reveals each already-completed step in sequence. This keeps
+    # the trace visibly progressive without pretending the replay is a live log.
+    delay_ms = _INITIAL_REPLAY_DELAY_MS + (index * _LINE_DELAY_MS)
     classes = "aim-terminal-line"
     if class_name:
         classes = f"{classes} {class_name}"
@@ -199,9 +204,10 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         opacity: 0;
-        transform: translateY(2px);
-        animation: aim-terminal-line-in 150ms ease-out forwards;
+        transform: translateX(-2px);
+        animation: aim-terminal-line-in {_LINE_REVEAL_MS}ms steps(2, end) forwards;
         animation-delay: var(--aim-line-delay);
+        will-change: opacity, transform;
       }}
       .aim-terminal-line.spacer {{ min-height: 0.65rem; }}
       .aim-prompt, .aim-command, .aim-start, .aim-section {{ color: #facc15; }}
@@ -220,7 +226,7 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         line-height: 1.45;
       }}
       @keyframes aim-terminal-line-in {{
-        to {{ opacity: 1; transform: translateY(0); }}
+        to {{ opacity: 1; transform: translateX(0); }}
       }}
       @media (prefers-reduced-motion: reduce) {{
         .aim-terminal-line {{
@@ -251,7 +257,7 @@ def render_retrieval_trace(result: AnalysisResult) -> None:
     """Replay the completed request path as a controlled progressive terminal trace."""
     st.subheader("Agentic Memory Trace")
     st.caption(
-        "Controlled replay of the completed request path. Request-derived values are shown "
-        "where available; this is not a raw backend log stream."
+        "Controlled replay of the completed request path. The terminal intentionally replays "
+        "the steps after the request returns; this is not a raw backend log stream."
     )
     st.html(_retrieval_trace_html(result))
