@@ -267,20 +267,31 @@ def test_servicenow_analyze_reuses_investigation_without_storing(evidence) -> No
     body = json.loads(response["body"])
 
     assert response["statusCode"] == 200
-    assert body == {
-        "recommendation": "Inspect connection saturation.",
-        "supporting_incident_ids": [str(evidence.incident.incident_id)],
-        "supporting_incidents": [
-            {
-                "incident_id": str(evidence.incident.incident_id),
-                "incident_number": "INC9000016",
-                "service": evidence.incident.service,
-                "similarity": evidence.similarity,
-                "root_cause": evidence.incident.root_cause,
-                "resolution": evidence.incident.resolution,
-            }
-        ],
+    assert body["recommendation"] == "Inspect connection saturation."
+    assert body["supporting_incident_ids"] == [str(evidence.incident.incident_id)]
+    assert body["supporting_incidents"] == [
+        {
+            "incident_id": str(evidence.incident.incident_id),
+            "incident_number": "INC9000016",
+            "service": evidence.incident.service,
+            "similarity": evidence.similarity,
+            "root_cause": evidence.incident.root_cause,
+            "resolution": evidence.incident.resolution,
+        }
+    ]
+    assert body["privacy_guard"] == {
+        "status": "not_required",
+        "redactions": 0,
+        "categories": [],
+        "ai_reviewed": False,
     }
+    assert set(body["timings"]) == {
+        "privacy_guard_ms",
+        "vector_retrieval_ms",
+        "bedrock_inference_ms",
+        "total_request_ms",
+    }
+    assert all(value >= 0 for value in body["timings"].values())
     assert repository.saved == []
     assert repository.search_calls[0]["scope"] == "hackathon-demo"
     assert bedrock.generation_calls
