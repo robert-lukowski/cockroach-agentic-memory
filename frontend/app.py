@@ -183,6 +183,7 @@ def main() -> None:
         transient_retry_occurred=api_result.transient_retry_occurred
     )
     render_metrics(result, round_trip_ms=api_result.round_trip_ms)
+    render_timings(result)
     render_recommendation(result)
     render_investigation_explanation()
     render_operational_memory_graph(
@@ -190,7 +191,6 @@ def main() -> None:
         current_incident_number=incident_number,
         current_service=service,
     )
-    render_timings(result)
     render_supporting_incidents(result)
     render_verified_security_controls()
 

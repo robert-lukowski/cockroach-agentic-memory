@@ -35,11 +35,10 @@ def render_demo_corpus_summary() -> None:
 
 
 def render_metrics(result: AnalysisResult, *, round_trip_ms: float) -> None:
-    columns = st.columns(4)
+    columns = st.columns(3)
     columns[0].metric("Best semantic match", format_percentage(result.best_similarity))
     columns[1].metric("Supporting incidents", str(result.supporting_count))
-    columns[2].metric("Confidence", format_percentage(result.confidence))
-    columns[3].metric("Client-observed round trip", format_milliseconds(round_trip_ms))
+    columns[2].metric("Client-observed round trip", format_milliseconds(round_trip_ms))
 
 
 def render_transient_retry_status(*, transient_retry_occurred: bool) -> None:
@@ -49,7 +48,6 @@ def render_transient_retry_status(*, transient_retry_occurred: bool) -> None:
 
 def _recommendation_html(result: AnalysisResult) -> str:
     safe_recommendation = escape(result.recommendation).replace("\n", "<br>")
-    confidence = format_percentage(result.confidence)
     supporting = str(result.supporting_count)
     return f"""
     <section class="aim-recommendation" aria-label="Grounded Bedrock recommendation">
@@ -64,7 +62,6 @@ def _recommendation_html(result: AnalysisResult) -> str:
       <div class="aim-rec-provenance" aria-label="Recommendation provenance">
         <span class="aim-provenance-pill">CockroachDB memory</span>
         <span class="aim-provenance-pill">{supporting} supporting incidents</span>
-        <span class="aim-provenance-pill">Confidence {confidence}</span>
       </div>
     </section>
     """
@@ -90,7 +87,10 @@ def render_investigation_explanation() -> None:
         "provided to Amazon Bedrock.\n"
         "5. Bedrock generated the grounded diagnosis and recommended actions shown above."
     )
-    st.caption("Architecture explanation — not live per-stage telemetry.")
+    st.caption(
+        "Architecture explanation — the timing values shown in Execution Telemetry are live "
+        "per-request measurements; this stage description is not a distributed trace."
+    )
     st.caption(
         "Trust boundary: Streamlit calls the application API; it does not connect directly to "
         "CockroachDB or Bedrock. The application owns the memory scope, fixed retrieval, evidence "
@@ -110,18 +110,166 @@ def render_investigation_explanation() -> None:
     )
 
 
+def _execution_telemetry_html(result: AnalysisResult) -> str:
+    timing_definitions = (
+        ("vector_retrieval_ms", "Vector retrieval", "CockroachDB evidence lookup"),
+        ("bedrock_inference_ms", "Bedrock inference", "Grounded recommendation generation"),
+        ("total_request_ms", "Backend total", "Application-side request processing"),
+    )
+    available = [
+        (key, label, detail, float(result.timings[key]))
+        for key, label, detail in timing_definitions
+        if key in result.timings
+    ]
+    if not available:
+        return ""
+
+    maximum = max(max(value, 0.0) for _key, _label, _detail, value in available)
+    rows: list[str] = []
+    for _key, label, detail, raw_value in available:
+        value = max(raw_value, 0.0)
+        width = 0.0 if maximum <= 0.0 else (value / maximum) * 100.0
+        rows.append(
+            f"""
+            <div class="aim-telemetry-row">
+              <div class="aim-telemetry-label">
+                <strong>{label}</strong>
+                <span>{detail}</span>
+              </div>
+              <div class="aim-telemetry-track" aria-hidden="true">
+                <span class="aim-telemetry-fill" style="width:{width:.1f}%"></span>
+              </div>
+              <div class="aim-telemetry-value">{format_milliseconds(value)}</div>
+            </div>
+            """
+        )
+
+    return f"""
+    <style>
+      .aim-telemetry-panel {{
+        border: 1px solid rgba(56, 189, 248, 0.22);
+        border-radius: 1rem;
+        padding: 1rem 1.05rem;
+        margin: 0.2rem 0 1rem;
+        background:
+          linear-gradient(145deg, rgba(15, 23, 42, 0.90), rgba(8, 17, 32, 0.84));
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
+      }}
+
+      .aim-telemetry-header {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+      }}
+
+      .aim-telemetry-header span:first-child {{
+        color: #BAE6FD;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }}
+
+      .aim-telemetry-badge {{
+        border: 1px solid rgba(34, 197, 94, 0.28);
+        border-radius: 999px;
+        padding: 0.28rem 0.52rem;
+        background: rgba(22, 101, 52, 0.14);
+        color: #BBF7D0;
+        font-size: 0.68rem;
+        font-weight: 720;
+      }}
+
+      .aim-telemetry-row {{
+        display: grid;
+        grid-template-columns: minmax(180px, 0.9fr) minmax(220px, 1.6fr) auto;
+        gap: 0.85rem;
+        align-items: center;
+        padding: 0.58rem 0;
+        border-top: 1px solid rgba(148, 163, 184, 0.10);
+      }}
+
+      .aim-telemetry-label {{
+        display: flex;
+        flex-direction: column;
+        gap: 0.12rem;
+      }}
+
+      .aim-telemetry-label strong {{
+        color: #F8FAFC;
+        font-size: 0.86rem;
+      }}
+
+      .aim-telemetry-label span {{
+        color: #94A3B8;
+        font-size: 0.70rem;
+      }}
+
+      .aim-telemetry-track {{
+        height: 0.46rem;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.12);
+      }}
+
+      .aim-telemetry-fill {{
+        display: block;
+        height: 100%;
+        min-width: 0.35rem;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #2563EB, #38BDF8);
+        box-shadow: 0 0 14px rgba(56, 189, 248, 0.24);
+      }}
+
+      .aim-telemetry-value {{
+        min-width: 5.6rem;
+        color: #E2E8F0;
+        font-size: 0.82rem;
+        font-weight: 750;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }}
+
+      .aim-telemetry-footnote {{
+        margin-top: 0.62rem;
+        color: #94A3B8;
+        font-size: 0.68rem;
+        line-height: 1.45;
+      }}
+
+      @media (max-width: 760px) {{
+        .aim-telemetry-row {{
+          grid-template-columns: 1fr auto;
+        }}
+        .aim-telemetry-track {{
+          grid-column: 1 / -1;
+          grid-row: 2;
+        }}
+      }}
+    </style>
+    <section class="aim-telemetry-panel" aria-label="Per-request execution telemetry">
+      <div class="aim-telemetry-header">
+        <span>Backend execution path</span>
+        <span class="aim-telemetry-badge">PER REQUEST</span>
+      </div>
+      {''.join(rows)}
+      <div class="aim-telemetry-footnote">
+        Backend timings are returned by the analysis service. Client-observed round trip above
+        also includes network time and any single transient retry delay.
+      </div>
+    </section>
+    """
+
+
 def render_timings(result: AnalysisResult) -> None:
-    if not result.timings:
+    telemetry_html = _execution_telemetry_html(result)
+    if not telemetry_html:
         return
-    labels = {
-        "vector_retrieval_ms": "Vector retrieval",
-        "bedrock_inference_ms": "Bedrock inference",
-        "total_request_ms": "Total request",
-    }
-    with st.expander("Timing details"):
-        for key, label in labels.items():
-            if key in result.timings:
-                st.write(f"{label}: {format_milliseconds(result.timings[key])}")
+    st.subheader("Execution Telemetry")
+    st.caption("Measured timing from the completed investigation request.")
+    st.html(telemetry_html)
 
 
 def _node_hover(node: GraphNode) -> str:

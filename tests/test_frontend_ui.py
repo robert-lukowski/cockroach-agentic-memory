@@ -1,6 +1,5 @@
 """Focused tests for frontend rendering behavior."""
 
-from contextlib import nullcontext
 from urllib.parse import urlsplit
 
 from frontend import ui_components
@@ -42,6 +41,7 @@ def test_recommendation_is_rendered_in_full(monkeypatch) -> None:
     assert "40. Complete synthetic action 40." in rendered[0]
     assert "Bedrock Recommendation" in rendered[0]
     assert "CockroachDB memory" in rendered[0]
+    assert "Confidence" not in rendered[0]
 
 
 def test_recommendation_html_escapes_model_output() -> None:
@@ -112,7 +112,8 @@ def test_investigation_explanation_is_architecturally_accurate(monkeypatch) -> N
     assert "CockroachDB" in rendered
     assert "validated" in rendered.lower()
     assert "Bedrock" in rendered
-    assert "not live per-stage telemetry" in rendered
+    assert "Execution Telemetry" in rendered
+    assert "not a distributed trace" in rendered
     assert "does not connect directly" in rendered
     assert "Bedrock does not choose SQL, scope, or IDs" in rendered
     assert "active incident was not stored" in rendered
@@ -150,34 +151,40 @@ def test_verification_links_are_public_navigation_without_credentials() -> None:
         assert parsed.query == ""
 
 
-def test_client_round_trip_is_rendered_once_and_not_mixed_with_backend_timings(
-    monkeypatch,
-) -> None:
+def test_metrics_omit_confidence_and_execution_telemetry_is_visible(monkeypatch) -> None:
     metric_calls: list[tuple[str, str]] = []
-    timing_lines: list[str] = []
+    headings: list[str] = []
     captions: list[str] = []
+    rendered_html: list[str] = []
 
     class MetricColumn:
         def metric(self, label: str, value: str) -> None:
             metric_calls.append((label, value))
 
-    monkeypatch.setattr(ui_components.st, "columns", lambda _count: [MetricColumn()] * 4)
-    monkeypatch.setattr(ui_components.st, "expander", lambda _label: nullcontext())
-    monkeypatch.setattr(ui_components.st, "write", timing_lines.append)
+    monkeypatch.setattr(ui_components.st, "columns", lambda _count: [MetricColumn()] * 3)
+    monkeypatch.setattr(ui_components.st, "subheader", headings.append)
     monkeypatch.setattr(ui_components.st, "caption", captions.append)
+    monkeypatch.setattr(ui_components.st, "html", rendered_html.append)
 
     result = _result()
     ui_components.render_metrics(result, round_trip_ms=1_234.0)
     ui_components.render_timings(result)
 
-    assert metric_calls[-1] == ("Client-observed round trip", "1,234 ms")
-    assert sum(label == "Client-observed round trip" for label, _value in metric_calls) == 1
-    assert timing_lines == [
-        "Vector retrieval: 120 ms",
-        "Bedrock inference: 800 ms",
-        "Total request: 1,000 ms",
+    assert metric_calls == [
+        ("Best semantic match", "Not available"),
+        ("Supporting incidents", "0"),
+        ("Client-observed round trip", "1,234 ms"),
     ]
-    assert captions == []
+    assert all(label != "Confidence" for label, _value in metric_calls)
+    assert headings == ["Execution Telemetry"]
+    assert captions == ["Measured timing from the completed investigation request."]
+    assert len(rendered_html) == 1
+    assert "Vector retrieval" in rendered_html[0]
+    assert "Bedrock inference" in rendered_html[0]
+    assert "Backend total" in rendered_html[0]
+    assert "120 ms" in rendered_html[0]
+    assert "800 ms" in rendered_html[0]
+    assert "1,000 ms" in rendered_html[0]
 
 
 def test_transient_retry_status_is_shown_only_after_a_retry(monkeypatch) -> None:
