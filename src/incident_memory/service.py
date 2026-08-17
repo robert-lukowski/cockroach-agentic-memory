@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4, uuid5
 
@@ -18,27 +20,33 @@ from incident_memory.models import (
     StoredIncident,
 )
 from incident_memory.ports import BedrockGateway, IncidentRepository
+from incident_memory.privacy import PrivacyAuditGateway, PrivacyGuard
 
 _SOURCE_ID_NAMESPACE = UUID("92ef77d7-0c4b-4ff9-b04e-8258902e7b41")
 
 
 class IncidentMemoryService:
-    """Coordinates validation models, embeddings, retrieval, and generation."""
+    """Coordinates privacy protection, embeddings, retrieval, and grounded generation."""
 
     def __init__(
         self,
         *,
         bedrock: BedrockGateway,
         repository: IncidentRepository,
+        privacy_auditor: PrivacyAuditGateway | None = None,
         id_factory: Callable[[], UUID] = uuid4,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        timer: Callable[[], float] = time.perf_counter,
     ) -> None:
         self._bedrock = bedrock
         self._repository = repository
+        self._privacy_guard = PrivacyGuard(privacy_auditor)
         self._id_factory = id_factory
         self._clock = clock
+        self._timer = timer
 
     def create_incident(self, request: IncidentCreateRequest) -> IncidentCreateResponse:
+        request = self._redacted_create_request(request)
         incident_id = (
             uuid5(_SOURCE_ID_NAMESPACE, request.source_id)
             if request.source_id is not None
@@ -92,6 +100,16 @@ class IncidentMemoryService:
             status="updated" if existing is not None else "created",
         )
 
+    def _redacted_create_request(self, request: IncidentCreateRequest) -> IncidentCreateRequest:
+        """Prevent direct identifiers from becoming durable memory or embedding input."""
+        return replace(
+            request,
+            title=self._privacy_guard.redact(request.title).text,
+            symptoms=self._privacy_guard.redact(request.symptoms).text,
+            root_cause=self._privacy_guard.redact(request.root_cause).text,
+            resolution=self._privacy_guard.redact(request.resolution).text,
+        )
+
     @staticmethod
     def _matches(existing: StoredIncident, request: IncidentCreateRequest) -> bool:
         return (
@@ -107,26 +125,74 @@ class IncidentMemoryService:
         )
 
     def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
+        total_started = self._timer()
+
+        privacy_started = self._timer()
+        protected = self._privacy_guard.protect_for_investigation(request.symptoms)
+        privacy_guard_ms = (self._timer() - privacy_started) * 1_000
+        protected_request = replace(request, symptoms=protected.text)
+
         embedding = self._validated_embedding(
-            self._bedrock.generate_embedding(request.symptoms)
+            self._bedrock.generate_embedding(protected_request.symptoms)
         )
+
+        retrieval_started = self._timer()
         results = tuple(
             self._repository.find_similar(
-                scope=request.scope,
+                scope=protected_request.scope,
                 embedding=embedding,
-                limit=request.top_k,
-                service=request.service,
-                environment=request.environment,
+                limit=protected_request.top_k,
+                service=protected_request.service,
+                environment=protected_request.environment,
             )
         )
-        evidence = self._validated_evidence(results, request=request)
+        vector_retrieval_ms = (self._timer() - retrieval_started) * 1_000
+        evidence = self._validated_evidence(results, request=protected_request)
+        evidence = self._redacted_evidence(evidence)
+
+        generation_started = self._timer()
         recommendation = self._bedrock.generate_recommendation(
-            symptoms=request.symptoms,
+            symptoms=protected_request.symptoms,
             evidence=evidence,
         ).strip()
+        bedrock_inference_ms = (self._timer() - generation_started) * 1_000
         if not recommendation:
             raise AdapterContractError("The Bedrock adapter returned an empty recommendation.")
-        return InvestigationResponse(recommendation=recommendation, evidence=evidence)
+
+        total_request_ms = (self._timer() - total_started) * 1_000
+        return InvestigationResponse(
+            recommendation=recommendation,
+            evidence=evidence,
+            privacy_guard=protected.report,
+            timings={
+                "privacy_guard_ms": privacy_guard_ms,
+                "vector_retrieval_ms": vector_retrieval_ms,
+                "bedrock_inference_ms": bedrock_inference_ms,
+                "total_request_ms": total_request_ms,
+            },
+        )
+
+    def _redacted_evidence(
+        self,
+        evidence: tuple[IncidentEvidence, ...],
+    ) -> tuple[IncidentEvidence, ...]:
+        """Apply the same boundary to historical evidence before Bedrock or API projection."""
+        protected: list[IncidentEvidence] = []
+        for item in evidence:
+            incident = item.incident
+            protected.append(
+                replace(
+                    item,
+                    incident=replace(
+                        incident,
+                        title=self._privacy_guard.redact(incident.title).text,
+                        symptoms=self._privacy_guard.redact(incident.symptoms).text,
+                        root_cause=self._privacy_guard.redact(incident.root_cause).text,
+                        resolution=self._privacy_guard.redact(incident.resolution).text,
+                    ),
+                )
+            )
+        return tuple(protected)
 
     @staticmethod
     def _validated_embedding(values: Sequence[float]) -> tuple[float, ...]:
