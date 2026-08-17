@@ -65,7 +65,7 @@ jobs:
           set -euo pipefail
           umask 077
           secret_file="$(mktemp "$RUNNER_TEMP/servicenow-secret.XXXXXX")"
-          privacy_dataset="$(mktemp "$RUNNER_TEMP/privacy-demo.XXXXXX.json")"
+          privacy_dataset="$(mktemp "$RUNNER_TEMP/privacy-demo.XXXXXX")"
           trap 'rm -f "$secret_file" "$privacy_dataset"' EXIT
 
           aws secretsmanager get-secret-value \
