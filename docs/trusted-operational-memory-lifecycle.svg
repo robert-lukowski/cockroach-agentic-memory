@@ -1,0 +1,294 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="930" viewBox="0 0 1600 930" role="img" aria-labelledby="title desc">
+  <title id="title">Trusted Operational Memory Lifecycle</title>
+  <desc id="desc">Privacy-first read-only incident investigation and resolved-only trusted memory ingestion with CockroachDB as durable operational memory.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0b1628"/>
+      <stop offset="1" stop-color="#09101c"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#173d68"/>
+      <stop offset="1" stop-color="#102845"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#14566c"/>
+      <stop offset="1" stop-color="#0d3446"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#65471a"/>
+      <stop offset="1" stop-color="#3b2b16"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#205736"/>
+      <stop offset="1" stop-color="#123923"/>
+    </linearGradient>
+    <linearGradient id="purple" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#41306d"/>
+      <stop offset="1" stop-color="#271e47"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="170%" height="190%">
+      <feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#000" flood-opacity="0.48"/>
+    </filter>
+    <marker id="arrowCyan" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#36d9ff"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#71f39b"/>
+    </marker>
+    <style>
+      .title{font:700 42px Inter,Segoe UI,Arial,sans-serif;fill:#f4f8ff}
+      .subtitle{font:400 18px Inter,Segoe UI,Arial,sans-serif;fill:#9fb4cc}
+      .lane{font:700 19px Inter,Segoe UI,Arial,sans-serif;letter-spacing:.7px}
+      .cardTitle{font:700 17px Inter,Segoe UI,Arial,sans-serif;fill:#f7fbff;text-anchor:middle}
+      .cardBody{font:400 13px Inter,Segoe UI,Arial,sans-serif;fill:#c7d7e8;text-anchor:middle}
+      .micro{font:600 11px Inter,Segoe UI,Arial,sans-serif;fill:#8ea7c2;text-anchor:middle;letter-spacing:.3px}
+      .pill{font:700 12px Inter,Segoe UI,Arial,sans-serif;fill:#dff8ff;text-anchor:middle}
+      .principleTitle{font:700 14px Inter,Segoe UI,Arial,sans-serif;fill:#eef7ff}
+      .principleBody{font:400 12px Inter,Segoe UI,Arial,sans-serif;fill:#a9bfd5}
+      .quote{font:700 22px Inter,Segoe UI,Arial,sans-serif;fill:#d8f6ff}
+    </style>
+  </defs>
+
+  <rect width="1600" height="930" fill="url(#bg)"/>
+  <circle cx="1380" cy="120" r="270" fill="#3a1f7a" opacity="0.12"/>
+  <circle cx="180" cy="560" r="330" fill="#006b86" opacity="0.08"/>
+
+  <text x="64" y="72" class="title">Trusted Operational Memory Lifecycle</text>
+  <text x="64" y="106" class="subtitle">Faster investigation without lowering the guard around data, evidence, or durable memory.</text>
+  <line x1="64" y1="126" x2="1536" y2="126" stroke="#25405c"/>
+
+  <text x="64" y="166" class="lane" fill="#35d7ff">INVESTIGATION FLOW · READ ONLY</text>
+  <text x="64" y="191" class="subtitle">Active incidents are retrieval context only — they are not written into trusted operational memory.</text>
+
+  <g stroke="#36d9ff" stroke-width="4" fill="none" marker-end="url(#arrowCyan)" opacity="0.88">
+    <path d="M250 310 H294"/>
+    <path d="M486 310 H530"/>
+    <path d="M722 310 H766"/>
+    <path d="M958 310 H1002"/>
+    <path d="M1194 310 H1238"/>
+    <path d="M1430 310 H1470"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <g transform="translate(64 222)">
+      <polygon points="12,16 176,16 190,29 26,29" fill="#1b517e" opacity=".55"/>
+      <polygon points="176,16 190,29 190,190 176,177" fill="#071a2b" opacity=".9"/>
+      <rect width="176" height="177" rx="20" fill="url(#blue)" stroke="#3aa9ff"/>
+      <circle cx="88" cy="42" r="20" fill="#0d6daf" stroke="#65c9ff"/>
+      <text x="88" y="49" class="cardTitle">1</text>
+      <text x="88" y="86" class="cardTitle">Active Incident</text>
+      <text x="88" y="116" class="cardBody">
+        <tspan x="88">ServiceNow or Command</tspan>
+        <tspan x="88" dy="19">Center case</tspan>
+      </text>
+      <text x="88" y="159" class="micro">UNTRUSTED CURRENT CONTEXT</text>
+    </g>
+
+    <g transform="translate(300 222)">
+      <polygon points="12,16 176,16 190,29 26,29" fill="#1d6774" opacity=".6"/>
+      <polygon points="176,16 190,29 190,190 176,177" fill="#071f27" opacity=".9"/>
+      <rect width="176" height="177" rx="20" fill="url(#cyan)" stroke="#3ce3ff"/>
+      <path d="M74 35 l14 -9 14 9 v20 c0 14 -10 25 -14 28 -4 -3 -14 -14 -14 -28z" fill="none" stroke="#72f0ff" stroke-width="3"/>
+      <path d="M81 53 l6 6 11 -14" fill="none" stroke="#72f0ff" stroke-width="3"/>
+      <text x="88" y="95" class="cardTitle">Privacy Guard</text>
+      <text x="88" y="122" class="cardBody">
+        <tspan x="88">Bounded direct-identifier</tspan>
+        <tspan x="88" dy="19">redaction before AI</tspan>
+      </text>
+      <text x="88" y="160" class="micro">SANITIZE FIRST</text>
+    </g>
+
+    <g transform="translate(536 222)">
+      <polygon points="12,16 176,16 190,29 26,29" fill="#1b517e" opacity=".55"/>
+      <polygon points="176,16 190,29 190,190 176,177" fill="#071a2b" opacity=".9"/>
+      <rect width="176" height="177" rx="20" fill="url(#blue)" stroke="#3aa9ff"/>
+      <g fill="none" stroke="#6fc7ff" stroke-width="2.5">
+        <rect x="59" y="35" width="25" height="25" transform="rotate(30 71.5 47.5)"/>
+        <rect x="91" y="35" width="25" height="25" transform="rotate(30 103.5 47.5)"/>
+        <rect x="75" y="62" width="25" height="25" transform="rotate(30 87.5 74.5)"/>
+      </g>
+      <text x="88" y="107" class="cardTitle">Titan Embedding</text>
+      <text x="88" y="134" class="cardBody">Sanitized symptoms</text>
+      <text x="88" y="154" class="cardBody">→ 1,024 dimensions</text>
+    </g>
+
+    <g transform="translate(772 222)">
+      <polygon points="12,16 176,16 190,29 26,29" fill="#234d67" opacity=".7"/>
+      <polygon points="176,16 190,29 190,190 176,177" fill="#071824" opacity=".9"/>
+      <rect width="176" height="177" rx="20" fill="#12364b" stroke="#4ad8ff" stroke-width="1.4"/>
+      <ellipse cx="88" cy="44" rx="34" ry="12" fill="#114c70" stroke="#76dcff"/>
+      <path d="M54 44v45c0 7 15 12 34 12s34-5 34-12V44" fill="#0d4261" stroke="#76dcff"/>
+      <ellipse cx="88" cy="67" rx="34" ry="12" fill="none" stroke="#76dcff" opacity=".7"/>
+      <ellipse cx="88" cy="89" rx="34" ry="12" fill="none" stroke="#76dcff" opacity=".7"/>
+      <text x="88" y="124" class="cardTitle">CockroachDB</text>
+      <text x="88" y="146" class="cardBody">Distributed Vector Indexing</text>
+      <text x="88" y="166" class="micro">TOP-K · COSINE · RESOLVED ONLY</text>
+    </g>
+
+    <g transform="translate(1008 222)">
+      <polygon points="12,16 176,16 190,29 26,29" fill="#1f5f4a" opacity=".6"/>
+      <polygon points="176,16 190,29 190,190 176,177" fill="#081e18" opacity=".9"/>
+      <rect width="176" height="177" rx="20" fill="#163d32" stroke="#6ff0a0"/>
+      <circle cx="88" cy="50" r="27" fill="none" stroke="#83f3aa" stroke-width="3"/>
+      <path d="M74 50 l9 9 19 -21" fill="none" stroke="#83f3aa" stroke-width="4"/>
+      <text x="88" y="100" class="cardTitle">Validated Evidence</text>
+      <text x="88" y="126" class="cardBody">
+        <tspan x="88">Scope checked and</tspan>
+        <tspan x="88" dy="19">sanitized again</tspan>
+      </text>
+      <text x="88" y="163" class="micro">APPLICATION CONTROLLED</text>
+    </g>
+
+    <g transform="translate(1244 222)">
+      <polygon points="12,16 176,16 190,29 26,29" fill="#4b387b" opacity=".65"/>
+      <polygon points="176,16 190,29 190,190 176,177" fill="#171126" opacity=".9"/>
+      <rect width="176" height="177" rx="20" fill="url(#purple)" stroke="#9a7cff"/>
+      <circle cx="88" cy="49" r="30" fill="none" stroke="#bca8ff" stroke-width="3"/>
+      <path d="M72 49c0-12 10-20 20-17 6-6 17-3 18 6 8 2 10 13 4 19-2 11-17 13-23 6-7 6-20 1-19-9-5-2-5-4 0-5z" fill="none" stroke="#bca8ff" stroke-width="2.6"/>
+      <text x="88" y="101" class="cardTitle">Bedrock Investigator</text>
+      <text x="88" y="128" class="cardBody">
+        <tspan x="88">Grounded reasoning over</tspan>
+        <tspan x="88" dy="19">validated evidence only</tspan>
+      </text>
+      <text x="88" y="164" class="micro">NO SQL · NO SCOPE CONTROL</text>
+    </g>
+
+    <g transform="translate(1476 240)">
+      <rect width="72" height="140" rx="18" fill="#173f2a" stroke="#69f08e"/>
+      <circle cx="36" cy="42" r="19" fill="none" stroke="#7cf59b" stroke-width="3"/>
+      <path d="M25 42 l7 7 15 -17" fill="none" stroke="#7cf59b" stroke-width="3"/>
+      <text x="36" y="81" class="pill">GROUNDED</text>
+      <text x="36" y="98" class="pill">ACTION</text>
+      <text x="36" y="122" class="micro">+ provenance</text>
+    </g>
+  </g>
+
+  <rect x="64" y="424" width="1480" height="2" fill="#203a53"/>
+  <text x="64" y="470" class="lane" fill="#f2b94b">TRUSTED MEMORY LIFECYCLE · WRITE PATH</text>
+  <text x="64" y="495" class="subtitle">Only resolved or closed incidents can pass through the controlled synchronization path into durable memory.</text>
+
+  <g stroke="#71f39b" stroke-width="4" fill="none" marker-end="url(#arrowGreen)" opacity="0.88">
+    <path d="M288 626 H340"/>
+    <path d="M564 626 H616"/>
+    <path d="M840 626 H892"/>
+    <path d="M1116 626 H1168"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <g transform="translate(64 534)">
+      <polygon points="14,16 210,16 224,30 28,30" fill="#76531e" opacity=".55"/>
+      <polygon points="210,16 224,30 224,204 210,190" fill="#251b0f" opacity=".9"/>
+      <rect width="210" height="190" rx="20" fill="url(#amber)" stroke="#e9b84e"/>
+      <text x="105" y="50" class="cardTitle">Resolved / Closed</text>
+      <text x="105" y="78" class="cardBody">
+        <tspan x="105">Operational outcome has</tspan>
+        <tspan x="105" dy="19">passed the incident lifecycle</tspan>
+      </text>
+      <text x="105" y="144" class="micro">ELIGIBLE FOR SYNCHRONIZATION</text>
+    </g>
+
+    <g transform="translate(340 534)">
+      <polygon points="14,16 210,16 224,30 28,30" fill="#76531e" opacity=".55"/>
+      <polygon points="210,16 224,30 224,204 210,190" fill="#251b0f" opacity=".9"/>
+      <rect width="210" height="190" rx="20" fill="url(#amber)" stroke="#e9b84e"/>
+      <text x="105" y="49" class="cardTitle">Privacy Guard</text>
+      <text x="105" y="79" class="cardBody">
+        <tspan x="105">Configured direct identifiers</tspan>
+        <tspan x="105" dy="19">sanitized before persistence</tspan>
+      </text>
+      <text x="105" y="145" class="micro">PRE-INGESTION BOUNDARY</text>
+    </g>
+
+    <g transform="translate(616 534)">
+      <polygon points="14,16 210,16 224,30 28,30" fill="#275c3b" opacity=".55"/>
+      <polygon points="210,16 224,30 224,204 210,190" fill="#0b2416" opacity=".9"/>
+      <rect width="210" height="190" rx="20" fill="url(#green)" stroke="#71f39b"/>
+      <text x="105" y="48" class="cardTitle">Sanitized Verified Memory</text>
+      <text x="105" y="78" class="cardBody">
+        <tspan x="105">Lifecycle context + verified</tspan>
+        <tspan x="105" dy="19">root cause + resolution</tspan>
+      </text>
+      <text x="105" y="145" class="micro">TRUSTED WRITE CANDIDATE</text>
+    </g>
+
+    <g transform="translate(892 534)">
+      <polygon points="14,16 210,16 224,30 28,30" fill="#275c3b" opacity=".55"/>
+      <polygon points="210,16 224,30 224,204 210,190" fill="#0b2416" opacity=".9"/>
+      <rect width="210" height="190" rx="20" fill="url(#green)" stroke="#71f39b"/>
+      <text x="105" y="48" class="cardTitle">Titan Embedding</text>
+      <text x="105" y="78" class="cardBody">
+        <tspan x="105">Vector representation created</tspan>
+        <tspan x="105" dy="19">only from sanitized fields</tspan>
+      </text>
+      <text x="105" y="145" class="micro">1,024-DIMENSION VECTOR</text>
+    </g>
+
+    <g transform="translate(1168 534)">
+      <polygon points="14,16 338,16 352,30 28,30" fill="#275c3b" opacity=".55"/>
+      <polygon points="338,16 352,30 352,204 338,190" fill="#0b2416" opacity=".9"/>
+      <rect width="338" height="190" rx="20" fill="#153e2a" stroke="#71f39b" stroke-width="1.4"/>
+      <ellipse cx="74" cy="58" rx="33" ry="11" fill="#175a34" stroke="#8bf4a8"/>
+      <path d="M41 58v48c0 7 15 11 33 11s33-4 33-11V58" fill="#124b2c" stroke="#8bf4a8"/>
+      <ellipse cx="74" cy="82" rx="33" ry="11" fill="none" stroke="#8bf4a8" opacity=".75"/>
+      <ellipse cx="74" cy="105" rx="33" ry="11" fill="none" stroke="#8bf4a8" opacity=".75"/>
+      <text x="222" y="47" class="cardTitle">CockroachDB Trusted Memory</text>
+      <text x="222" y="76" class="cardBody">
+        <tspan x="222">Durable operational record, provenance,</tspan>
+        <tspan x="222" dy="19">lifecycle context and vector representation</tspan>
+        <tspan x="222" dy="19">remain part of one memory model</tspan>
+      </text>
+      <rect x="123" y="147" width="198" height="27" rx="14" fill="#0d2618" stroke="#4ba66a"/>
+      <text x="222" y="165" class="pill">DISTRIBUTED VECTOR INDEXING · MCP</text>
+    </g>
+  </g>
+
+  <path d="M1320 522 C1320 472 942 474 862 414 C832 391 840 382 858 365" fill="none" stroke="#70f19a" stroke-width="3" stroke-dasharray="9 8" marker-end="url(#arrowGreen)" opacity=".85"/>
+  <rect x="1055" y="449" width="210" height="28" rx="14" fill="#0d2618" stroke="#4ba66a"/>
+  <text x="1160" y="468" class="pill">READ VERIFIED MEMORY</text>
+
+  <rect x="64" y="774" width="1480" height="88" rx="20" fill="#0a1727" stroke="#203f5c"/>
+
+  <g transform="translate(92 796)">
+    <text class="principleTitle">Privacy by design</text>
+    <text y="22" class="principleBody">
+      <tspan x="0">Configured direct identifiers are sanitized</tspan>
+      <tspan x="0" dy="16">before embedding or persistence.</tspan>
+    </text>
+  </g>
+
+  <line x1="400" y1="790" x2="400" y2="846" stroke="#23425e"/>
+
+  <g transform="translate(430 796)">
+    <text class="principleTitle">Resolved-only memory</text>
+    <text y="22" class="principleBody">
+      <tspan x="0">Active incidents remain read-only context</tspan>
+      <tspan x="0" dy="16">until the operational outcome is verified.</tspan>
+    </text>
+  </g>
+
+  <line x1="776" y1="790" x2="776" y2="846" stroke="#23425e"/>
+
+  <g transform="translate(806 796)">
+    <text class="principleTitle">Application-controlled evidence</text>
+    <text y="22" class="principleBody">
+      <tspan x="0">Models never choose SQL, scope, retrieval</tspan>
+      <tspan x="0" dy="16">count, or supporting incident IDs.</tspan>
+    </text>
+  </g>
+
+  <line x1="1190" y1="790" x2="1190" y2="846" stroke="#23425e"/>
+
+  <g transform="translate(1220 796)">
+    <text class="principleTitle">CockroachDB = durable memory</text>
+    <text y="22" class="principleBody">
+      <tspan x="0">Operational record, provenance, lifecycle</tspan>
+      <tspan x="0" dy="16">and vector retrieval stay together.</tspan>
+    </text>
+  </g>
+
+  <rect x="64" y="881" width="1480" height="1" fill="#1f3d57"/>
+  <text x="64" y="914" class="quote">“It is not only what can the model see? It is also what are we willing to remember?”</text>
+  <text x="1450" y="914" text-anchor="end" style="font:700 17px Inter,Segoe UI,Arial,sans-serif;fill:#8c6cff">CockroachDB · foundation of trusted operational memory</text>
+</svg>
