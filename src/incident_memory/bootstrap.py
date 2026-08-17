@@ -36,4 +36,8 @@ def build_service(settings: Settings) -> IncidentMemoryService:
         embedding_model_id=settings.embedding_model_id,
         generation_model_id=settings.generation_model_id,
     )
-    return IncidentMemoryService(bedrock=bedrock, repository=repository)
+    return IncidentMemoryService(
+        bedrock=bedrock,
+        repository=repository,
+        privacy_auditor=bedrock,
+    )
