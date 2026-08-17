@@ -24,10 +24,12 @@ from frontend.models import (  # noqa: E402
     ResponseValidationError,
     normalize_analysis_response,
 )
-from frontend.privacy_ui import render_privacy_guard  # noqa: E402
+from frontend.privacy_ui import (  # noqa: E402
+    render_investigation_explanation,
+    render_privacy_guard,
+)
 from frontend.ui_components import (  # noqa: E402
     render_demo_corpus_summary,
-    render_investigation_explanation,
     render_metrics,
     render_operational_memory_graph,
     render_recommendation,
@@ -155,7 +157,10 @@ def main() -> None:
         )
         payload = request.to_api_payload()
         config = load_config(secrets=_secrets())
-        with st.spinner("Applying privacy guard, retrieving memory, and generating a recommendation…"):
+        spinner_text = (
+            "Applying privacy guard, retrieving memory, and generating a recommendation…"
+        )
+        with st.spinner(spinner_text):
             api_result = AgenticMemoryApiClient(config).analyze(payload)
             result = normalize_analysis_response(api_result.payload)
     except InputValidationError as error:
