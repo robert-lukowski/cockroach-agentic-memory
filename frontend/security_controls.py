@@ -18,8 +18,8 @@ VERIFIED_SECURITY_CONTROLS = (
         status="Enforced",
         description=(
             "Configured direct identifiers are redacted before Titan embeddings, durable "
-            "operational memory, or the Bedrock Investigator; the secondary privacy reviewer "
-            "receives sanitized text only."
+            "operational memory, or the Bedrock-powered Investigator; the secondary privacy "
+            "reviewer receives sanitized text only."
         ),
     ),
     SecurityControl(
