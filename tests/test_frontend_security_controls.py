@@ -33,7 +33,7 @@ def test_privacy_boundary_card_describes_the_pre_ai_boundary_precisely() -> None
     assert "direct identifiers" in privacy.description
     assert "before Titan embeddings" in privacy.description
     assert "operational memory" in privacy.description
-    assert "Bedrock Investigator" in privacy.description
+    assert "Bedrock-powered Investigator" in privacy.description
     assert "sanitized text only" in privacy.description
     assert "never leaves ServiceNow" not in privacy.description
 
