@@ -6,12 +6,7 @@ from html import escape
 
 import streamlit as st
 
-from frontend.models import (
-    AnalysisResult,
-    PrivacyGuardResult,
-    format_milliseconds,
-    format_percentage,
-)
+from frontend.models import AnalysisResult, format_milliseconds, format_percentage
 
 _REQUESTED_TOP_K = 5
 _INITIAL_REPLAY_DELAY_MS = 1_200
@@ -19,47 +14,7 @@ _LINE_DELAY_MS = 140
 _LINE_REVEAL_MS = 140
 
 
-def _privacy_trace(result: AnalysisResult) -> tuple[str, str]:
-    # Streamlit Cloud can retain result objects created by a previous app version
-    # during hot reloads. Missing additive metadata must degrade to unavailable
-    # instead of crashing the full investigation result page.
-    guard = getattr(result, "privacy_guard", PrivacyGuardResult())
-    if guard.status == "verified":
-        details = (
-            f"PASS · {guard.redactions} configured direct identifier(s) redacted · "
-            "secondary review PASS"
-        )
-        return details, "ok"
-    if guard.status == "not_required":
-        return "PASS · no configured direct identifiers detected", "ok"
-    if guard.status == "redacted_audit_unavailable":
-        details = (
-            f"REDACTION ENFORCED · {guard.redactions} field(s) · "
-            "secondary review unavailable"
-        )
-        return details, "warn"
-    if guard.status == "not_available":
-        return "Not reported in this response", "muted"
-    return f"REDACTION ENFORCED · {guard.redactions} field(s)", "warn"
-
-
-def _privacy_input_line(result: AnalysisResult) -> str:
-    guard = getattr(result, "privacy_guard", PrivacyGuardResult())
-    if guard.status == "not_available":
-        return (
-            "privacy policy: "
-            '<span class="aim-info">SANITIZE BEFORE DOWNSTREAM AI</span>'
-        )
-    return (
-        "downstream AI input: "
-        '<span class="aim-ok">SANITIZED CONTEXT ONLY</span>'
-    )
-
-
 def _terminal_line(content: str, *, index: int, class_name: str = "") -> str:
-    # Give Streamlit's rerun a settle window before the first line appears. The
-    # browser then reveals each completed control step in sequence so the judge
-    # can follow the architecture without presenting fabricated raw log events.
     delay_ms = _INITIAL_REPLAY_DELAY_MS + (index * _LINE_DELAY_MS)
     classes = "aim-terminal-line"
     if class_name:
@@ -85,7 +40,6 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         else "Not available"
     )
     best_similarity = format_percentage(getattr(result, "best_similarity", None))
-    privacy_detail, privacy_class = _privacy_trace(result)
 
     rows: list[tuple[str, str]] = [
         (
@@ -93,26 +47,19 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
             '<span class="aim-command">investigate --trace</span>',
             "command-line",
         ),
-        ('<span class="aim-start">Trace started...</span>', "start"),
-        ("&nbsp;", "spacer"),
-        ('<span class="aim-section">PRIVACY BOUNDARY</span>', "section"),
-        (
-            "status: "
-            f'<span class="aim-{privacy_class}">{escape(privacy_detail)}</span>',
-            "",
-        ),
-        (_privacy_input_line(result), ""),
+        ('<span class="aim-start">Investigation path started...</span>', "start"),
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">TITAN TEXT EMBEDDINGS V2</span>', "section"),
-        ('embedding: <span class="aim-ok">GENERATED</span>', ""),
+        ('semantic representation: <span class="aim-ok">GENERATED</span>', ""),
         ('vector dimensions: <span class="aim-info">1,024</span>', ""),
         ("&nbsp;", "spacer"),
-        ('<span class="aim-section">COCKROACHDB OPERATIONAL MEMORY</span>', "section"),
-        ('access: <span class="aim-info">Cloud Managed MCP</span>', ""),
         (
-            'index: <span class="aim-info">Distributed Vector Indexing</span>',
-            "",
+            '<span class="aim-section">COCKROACHDB — TRUSTED OPERATIONAL MEMORY</span>',
+            "section",
         ),
+        ('role: <span class="aim-ok">DURABLE OPERATIONAL MEMORY BACKBONE</span>', ""),
+        ('access: <span class="aim-info">Cloud Managed MCP</span>', ""),
+        ('index: <span class="aim-info">Distributed Vector Indexing</span>', ""),
         ('distance metric: <span class="aim-info">cosine</span>', ""),
         (
             "requested top-k: "
@@ -138,32 +85,22 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         ('<span class="aim-section">EVIDENCE CONTROL</span>', "section"),
         ('retrieved evidence: <span class="aim-ok">VALIDATED</span>', ""),
         ('retrieval query: <span class="aim-info">APPLICATION-OWNED</span>', ""),
-        (
-            'evidence selection: <span class="aim-info">APPLICATION-CONTROLLED</span>',
-            "",
-        ),
-        (
-            'model role: <span class="aim-ok">REASON OVER PROVIDED EVIDENCE</span>',
-            "",
-        ),
+        ('evidence selection: <span class="aim-info">APPLICATION-CONTROLLED</span>', ""),
+        ('model role: <span class="aim-ok">REASON OVER PROVIDED EVIDENCE</span>', ""),
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">BEDROCK-POWERED INVESTIGATOR</span>', "section"),
         ('grounded recommendation: <span class="aim-ok">GENERATED</span>', ""),
-        ("context: current incident + validated operational memory", ""),
+        ('context: current incident + <span class="aim-ok">trusted operational memory</span>', ""),
         ("&nbsp;", "spacer"),
-        ('<span class="aim-section">MEMORY POLICY</span>', "section"),
+        ('<span class="aim-section">TRUSTED MEMORY LIFECYCLE</span>', "section"),
         ('active investigation mode: <span class="aim-warn">READ-ONLY</span>', ""),
         ('write admission: <span class="aim-info">LIFECYCLE-GATED</span>', ""),
-        (
-            "trusted memory candidates: "
-            '<span class="aim-info">RESOLVED / CLOSED ONLY</span>',
-            "",
-        ),
+        ('trusted memory candidates: <span class="aim-info">RESOLVED / CLOSED ONLY</span>', ""),
         ("&nbsp;", "spacer"),
-        ('<span class="aim-finish">Trace complete.</span>', "finish"),
+        ('<span class="aim-finish">Investigation path complete.</span>', "finish"),
         (
-            '<span class="aim-muted">No credentials, secrets, raw payloads, or removed '
-            "identifiers are displayed.</span>",
+            '<span class="aim-muted">Trusted history retrieved. Evidence controlled. '
+            'Recommendation grounded.</span>',
             "note",
         ),
     ]
@@ -231,7 +168,6 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
       .aim-ok, .aim-finish {{ color: #86efac; font-weight: 800; }}
       .aim-info {{ color: #67e8f9; font-weight: 700; }}
       .aim-warn {{ color: #fde68a; font-weight: 800; }}
-      .aim-no {{ color: #fca5a5; font-weight: 800; }}
       .aim-muted {{ color: #71717a; }}
       .aim-terminal-line.note {{
         margin-top: 0.15rem;
@@ -270,8 +206,9 @@ def render_retrieval_trace(result: AnalysisResult) -> None:
     """Render the investigation control path as a progressive terminal trace."""
     st.subheader("Agentic Memory Trace")
     st.caption(
-        "Follow the investigation step by step — see how privacy controls protect context, "
-        "CockroachDB anchors operational memory retrieval, evidence stays application-controlled, "
-        "and Bedrock turns trusted history into an actionable recommendation."
+        "Follow the investigation step by step — Titan creates the semantic representation, "
+        "CockroachDB powers the trusted operational-memory backbone, application-controlled "
+        "evidence grounds the reasoning, and Bedrock turns trusted history into an actionable "
+        "recommendation."
     )
     st.html(_retrieval_trace_html(result))
