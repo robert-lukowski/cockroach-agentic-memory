@@ -1,4 +1,4 @@
-"""Judge-facing Privacy Guard presentation with no sensitive-value rendering."""
+"""Judge-facing Privacy Guard presentation without echoing removed values in results."""
 
 from __future__ import annotations
 
@@ -119,7 +119,7 @@ def _privacy_guard_html(result: AnalysisResult) -> str:
         <span class="aim-privacy-pill">Redactions {guard.redactions}</span>
         <span class="aim-privacy-pill">Types {escape(categories)}</span>
         <span class="aim-privacy-pill">Secondary AI review {reviewed}</span>
-        <span class="aim-privacy-pill">Raw values never rendered</span>
+        <span class="aim-privacy-pill">Removed values not echoed in results</span>
       </div>
     </section>
     """
