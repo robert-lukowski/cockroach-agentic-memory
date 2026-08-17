@@ -7,6 +7,7 @@ from frontend.security_controls import VERIFIED_SECURITY_CONTROLS
 
 def test_verified_security_scorecard_contains_supported_controls() -> None:
     expected = {
+        "Pre-AI Privacy Boundary": "Enforced",
         "GitHub OIDC": "Enabled",
         "Static AWS credentials": "0",
         "AWS credential model": "Temporary",
@@ -20,6 +21,21 @@ def test_verified_security_scorecard_contains_supported_controls() -> None:
 
     assert {control.name: control.status for control in VERIFIED_SECURITY_CONTROLS} == expected
     assert all(control.description for control in VERIFIED_SECURITY_CONTROLS)
+
+
+def test_privacy_boundary_card_describes_the_pre_ai_boundary_precisely() -> None:
+    privacy = next(
+        control
+        for control in VERIFIED_SECURITY_CONTROLS
+        if control.name == "Pre-AI Privacy Boundary"
+    )
+
+    assert "direct identifiers" in privacy.description
+    assert "before Titan embeddings" in privacy.description
+    assert "operational memory" in privacy.description
+    assert "Bedrock Investigator" in privacy.description
+    assert "sanitized text only" in privacy.description
+    assert "never leaves ServiceNow" not in privacy.description
 
 
 def test_security_scorecard_contains_no_resource_or_credential_values() -> None:
