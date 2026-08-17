@@ -14,6 +14,15 @@ class SecurityControl:
 
 VERIFIED_SECURITY_CONTROLS = (
     SecurityControl(
+        name="Pre-AI Privacy Boundary",
+        status="Enforced",
+        description=(
+            "Configured direct identifiers are redacted before Titan embeddings, durable "
+            "operational memory, or the Bedrock Investigator; the secondary privacy reviewer "
+            "receives sanitized text only."
+        ),
+    ),
+    SecurityControl(
         name="GitHub OIDC",
         status="Enabled",
         description=(
