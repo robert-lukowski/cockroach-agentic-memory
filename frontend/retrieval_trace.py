@@ -45,7 +45,10 @@ def _history_narrative(result: AnalysisResult) -> tuple[str, str, str]:
 
     return (
         "Not available",
-        'context: current incident + <span class="aim-info">governed operational-memory retrieval</span>',
+        (
+            "context: current incident + "
+            '<span class="aim-info">governed operational-memory retrieval</span>'
+        ),
         "Operational-memory retrieval completed. Evidence controlled. Recommendation grounded.",
     )
 
