@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import cast
+
+from frontend.models import AnalysisResult
 from frontend.retrieval_trace import _retrieval_trace_html
 
 
@@ -14,7 +17,9 @@ class _LegacyAnalysisResult:
 
 
 def test_retrieval_trace_tolerates_legacy_result_without_additive_metadata() -> None:
-    html = _retrieval_trace_html(_LegacyAnalysisResult())  # type: ignore[arg-type]
+    legacy_result = cast(AnalysisResult, _LegacyAnalysisResult())
+
+    html = _retrieval_trace_html(legacy_result)
 
     assert "Not available in this response" in html
     assert 'returned memories: <span class="aim-ok">Not available</span>' in html
