@@ -151,6 +151,10 @@ def main() -> None:
         "Load a synthetic scenario or enter your own incident. The active incident is used for "
         "retrieval only and is not written into trusted operational memory."
     )
+    st.info(
+        "**Judge tip:** Try a built-in scenario, switch to **Custom incident**, or select the "
+        "**Privacy Guard** scenario to verify pre-AI direct-identifier redaction."
+    )
 
     scenario_options = {"custom": "Custom incident"} | {
         scenario.key: scenario.label for scenario in DEMO_SCENARIOS
