@@ -6,7 +6,7 @@ from html import escape
 
 import streamlit as st
 
-from frontend.models import AnalysisResult
+from frontend.models import AnalysisResult, format_milliseconds
 
 _ARCHITECTURE_URL = "https://github.com/robert-lukowski/cockroach-agentic-memory#architecture"
 _AUTOMATION_URL = (
@@ -48,6 +48,12 @@ def _privacy_guard_html(result: AnalysisResult) -> str:
 
     categories = " · ".join(category.upper() for category in guard.categories) or "NONE"
     reviewed = "Yes" if guard.ai_reviewed else "No"
+    guard_ms = result.timings.get("privacy_guard_ms")
+    timing_pill = (
+        f'<span class="aim-privacy-pill">Guard time {format_milliseconds(guard_ms)}</span>'
+        if guard_ms is not None
+        else ""
+    )
     return f"""
     <style>
       .aim-privacy-card {{
@@ -119,6 +125,7 @@ def _privacy_guard_html(result: AnalysisResult) -> str:
         <span class="aim-privacy-pill">Redactions {guard.redactions}</span>
         <span class="aim-privacy-pill">Types {escape(categories)}</span>
         <span class="aim-privacy-pill">Secondary AI review {reviewed}</span>
+        {timing_pill}
         <span class="aim-privacy-pill">Removed values not echoed in results</span>
       </div>
     </section>
