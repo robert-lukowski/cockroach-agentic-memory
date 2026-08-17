@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from frontend.models import AnalysisResult
+from frontend.models import AnalysisResult, SupportingIncident
 from frontend.retrieval_trace import _retrieval_trace_html
 
 
@@ -100,11 +100,14 @@ def test_retrieval_trace_keeps_matching_runtime_values_visible() -> None:
         confidence=None,
         timings={"vector_retrieval_ms": 12.5},
         supporting_incidents=(
-            {
-                "incident_id": "INC001",
-                "short_description": "Synthetic matching incident",
-                "similarity": 0.91,
-            },
+            SupportingIncident(
+                incident_id="incident-1",
+                incident_number="INC0000001",
+                service="synthetic-service",
+                similarity=0.91,
+                root_cause="Synthetic root cause",
+                resolution="Synthetic resolution",
+            ),
         ),
         legacy_incident_ids=(),
         supporting_evidence_reported=True,
