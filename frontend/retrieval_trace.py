@@ -43,7 +43,7 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
 
     rows: list[tuple[str, str]] = [
         (
-            '<span class="aim-prompt">judge@agentic-memory:~$</span> '
+            '<span class="aim-prompt">PS Agentic-Memory&gt;</span> '
             '<span class="aim-command">investigate --trace</span>',
             "command-line",
         ),
@@ -112,38 +112,41 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
     return f"""
     <style>
       .aim-terminal {{
-        background: #050505;
-        border: 1px solid rgba(250, 204, 21, 0.28);
+        position: relative;
+        isolation: isolate;
+        background: #012456;
+        border: 1px solid rgba(255, 255, 255, 0.38);
         border-radius: 0.9rem;
         margin: 0.2rem 0 1rem;
         overflow: hidden;
-        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.30);
+        box-shadow: 0 16px 38px rgba(2, 20, 45, 0.36);
       }}
       .aim-terminal-bar {{
         display: flex;
         align-items: center;
         gap: 0.45rem;
         padding: 0.65rem 0.8rem;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.13);
-        background: #0b0b0b;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+        background: #0b3267;
       }}
       .aim-terminal-dot {{
         width: 0.58rem;
         height: 0.58rem;
         border-radius: 999px;
-        border: 1px solid rgba(250, 204, 21, 0.32);
-        background: rgba(250, 204, 21, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        background: rgba(219, 234, 254, 0.34);
       }}
       .aim-terminal-title {{
         margin-left: 0.35rem;
-        color: #a1a1aa;
+        color: #dbeafe;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 0.68rem;
         letter-spacing: 0.04em;
       }}
       .aim-terminal-body {{
+        background: #012456;
         padding: 1rem 1.05rem 1.1rem;
-        color: #d4d4d8;
+        color: #f8fafc;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 0.78rem;
         line-height: 1.55;
@@ -154,34 +157,36 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         opacity: 0;
-        transform: translateX(-2px);
-        animation: aim-terminal-line-in {_LINE_REVEAL_MS}ms steps(2, end) forwards;
+        visibility: hidden;
+        animation: aim-terminal-line-in {_LINE_REVEAL_MS}ms steps(1, end) forwards;
         animation-delay: var(--aim-line-delay);
-        will-change: opacity, transform;
       }}
       .aim-terminal-line.spacer {{ min-height: 0.65rem; }}
-      .aim-prompt, .aim-command, .aim-start, .aim-section {{ color: #facc15; }}
-      .aim-prompt {{ font-weight: 800; }}
-      .aim-command {{ font-weight: 700; }}
-      .aim-start {{ color: #fde047; }}
-      .aim-section {{ font-weight: 800; letter-spacing: 0.045em; }}
-      .aim-ok, .aim-finish {{ color: #86efac; font-weight: 800; }}
-      .aim-info {{ color: #67e8f9; font-weight: 700; }}
-      .aim-warn {{ color: #fde68a; font-weight: 800; }}
-      .aim-muted {{ color: #71717a; }}
+      .aim-prompt {{ color: #ffffff; font-weight: 800; }}
+      .aim-command {{ color: #bfdbfe; font-weight: 800; }}
+      .aim-start {{ color: #dbeafe; font-weight: 700; }}
+      .aim-section {{
+        color: #93c5fd;
+        font-weight: 800;
+        letter-spacing: 0.045em;
+      }}
+      .aim-ok, .aim-finish {{ color: #ffffff; font-weight: 800; }}
+      .aim-info {{ color: #7dd3fc; font-weight: 700; }}
+      .aim-warn {{ color: #bfdbfe; font-weight: 800; }}
+      .aim-muted {{ color: #b8cee8; }}
       .aim-terminal-line.note {{
         margin-top: 0.15rem;
         font-size: 0.69rem;
         line-height: 1.45;
       }}
       @keyframes aim-terminal-line-in {{
-        to {{ opacity: 1; transform: translateX(0); }}
+        to {{ opacity: 1; visibility: visible; }}
       }}
       @media (prefers-reduced-motion: reduce) {{
         .aim-terminal-line {{
           animation: none;
           opacity: 1;
-          transform: none;
+          visibility: visible;
         }}
       }}
     </style>
@@ -195,7 +200,7 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         <span class="aim-terminal-dot"></span>
         <span class="aim-terminal-dot"></span>
         <span class="aim-terminal-dot"></span>
-        <span class="aim-terminal-title">agentic-memory — bash</span>
+        <span class="aim-terminal-title">agentic-memory — PowerShell</span>
       </div>
       <div class="aim-terminal-body">{lines}</div>
     </section>
