@@ -21,6 +21,25 @@ _LABELED_PHONE_PATTERN = re.compile(
 _LABELED_NAME_PATTERN = re.compile(
     r"(?im)^(\s*(?:customer\s+name|contact\s+name|name)\s*[:=]\s*)([^\r\n]{2,96})$"
 )
+_STRICT_PHONE_VALUE_PATTERN = re.compile(r"^\+?[0-9][0-9().\s-]{5,30}[0-9]$")
+_PHONE_FIELD_LABELS = {
+    "phone",
+    "phone number",
+    "mobile",
+    "mobile number",
+    "telephone",
+    "telephone number",
+    "tel",
+    "contact phone",
+}
+_NAME_FIELD_LABELS = {
+    "name",
+    "full name",
+    "first name",
+    "last name",
+    "customer name",
+    "contact name",
+}
 
 
 class PrivacyAuditGateway(Protocol):
@@ -94,6 +113,41 @@ class PrivacyGuard:
                 status="redacted" if redactions else "not_required",
                 redactions=redactions,
                 categories=unique_categories,
+                ai_reviewed=False,
+            ),
+        )
+
+    @classmethod
+    def redact_field(cls, text: str, *, label: str | None = None) -> ProtectedText:
+        """Redact a bounded standalone field while using safe structural context when present."""
+        protected = cls.redact(text)
+        if protected.report.redactions:
+            return protected
+
+        normalized_label = ""
+        if label:
+            normalized_label = re.sub(r"[\s_-]+", " ", label.strip().lower())
+
+        category: str | None = None
+        replacement: str | None = None
+        if normalized_label in _PHONE_FIELD_LABELS:
+            category = "phone"
+            replacement = "[REDACTED_PHONE]"
+        elif normalized_label in _NAME_FIELD_LABELS:
+            category = "name"
+            replacement = "[REDACTED_NAME]"
+        elif _STRICT_PHONE_VALUE_PATTERN.fullmatch(text.strip()):
+            category = "phone"
+            replacement = "[REDACTED_PHONE]"
+
+        if category is None or replacement is None:
+            return protected
+        return ProtectedText(
+            text=replacement,
+            report=PrivacyGuardReport(
+                status="redacted",
+                redactions=1,
+                categories=(category,),
                 ai_reviewed=False,
             ),
         )
