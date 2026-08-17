@@ -10,12 +10,12 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 from frontend.api_client import AgenticMemoryApiClient, ApiCallResult
-from frontend.judge_gate import hash_pin
+from frontend.judge_gate import hash_access_code
 from frontend.models import DEMO_SCENARIOS
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ENTRYPOINT = REPOSITORY_ROOT / "frontend" / "app.py"
-_TEST_PIN = "012345"
+_TEST_ACCESS_CODE = "0aBcDefGhijkLmnoPqrstUvwxYz_12345"
 
 
 def _widget_value(elements, label: str):
@@ -28,12 +28,12 @@ def _widget(elements, label: str):
 
 def _configured_app() -> AppTest:
     app = AppTest.from_file(ENTRYPOINT, default_timeout=20)
-    app.secrets["JUDGE_PIN_SHA256"] = hash_pin(_TEST_PIN)
+    app.secrets["JUDGE_ACCESS_CODE_SHA256"] = hash_access_code(_TEST_ACCESS_CODE)
     return app.run()
 
 
-def _unlock(app: AppTest, *, pin: str = _TEST_PIN) -> AppTest:
-    _widget(app.text_input, "Judge PIN").input(pin).run()
+def _unlock(app: AppTest, *, access_code: str = _TEST_ACCESS_CODE) -> AppTest:
+    _widget(app.text_input, "Judge access code").input(access_code).run()
     _widget(app.button, "Unlock live investigation").click().run()
     return app
 
@@ -98,7 +98,7 @@ def test_selecting_sample_still_populates_its_values() -> None:
     assert not app.exception
 
 
-def test_missing_pin_secret_fails_closed_and_keeps_live_button_disabled(monkeypatch) -> None:
+def test_missing_access_secret_fails_closed_and_keeps_live_button_disabled(monkeypatch) -> None:
     calls: list[dict[str, str]] = []
     monkeypatch.setattr(
         AgenticMemoryApiClient,
@@ -115,7 +115,26 @@ def test_missing_pin_secret_fails_closed_and_keeps_live_button_disabled(monkeypa
     assert not app.exception
 
 
-def test_wrong_pin_keeps_investigation_locked_and_never_calls_api(monkeypatch) -> None:
+def test_short_pin_is_rejected_even_if_its_hash_is_configured(monkeypatch) -> None:
+    calls: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        AgenticMemoryApiClient,
+        "analyze",
+        lambda _client, payload: calls.append(payload),
+    )
+    app = AppTest.from_file(ENTRYPOINT, default_timeout=20)
+    app.secrets["JUDGE_ACCESS_CODE_SHA256"] = hash_access_code("012345")
+    app = app.run()
+
+    _unlock(app, access_code="012345")
+
+    assert _widget(app.button, "⚡ Run Agentic Investigation").disabled is True
+    assert calls == []
+    assert any(item.value == "The judge access code is not valid." for item in app.error)
+    assert not app.exception
+
+
+def test_wrong_access_code_keeps_investigation_locked_and_never_calls_api(monkeypatch) -> None:
     calls: list[dict[str, str]] = []
     monkeypatch.setattr(
         AgenticMemoryApiClient,
@@ -124,15 +143,15 @@ def test_wrong_pin_keeps_investigation_locked_and_never_calls_api(monkeypatch) -
     )
     app = _configured_app()
 
-    _unlock(app, pin="12345")
+    _unlock(app, access_code="WrongAccessCode_0123456789ABCDEFGH")
 
     assert _widget(app.button, "⚡ Run Agentic Investigation").disabled is True
     assert calls == []
-    assert any(item.value == "The judge PIN is not valid." for item in app.error)
+    assert any(item.value == "The judge access code is not valid." for item in app.error)
     assert not app.exception
 
 
-def test_correct_pin_unlocks_only_the_streamlit_session_and_allows_api_call(
+def test_correct_access_code_unlocks_only_streamlit_session_and_allows_api_call(
     monkeypatch,
 ) -> None:
     calls: list[dict[str, str]] = []
@@ -161,13 +180,13 @@ def test_correct_pin_unlocks_only_the_streamlit_session_and_allows_api_call(
 
     assert _widget(app.button, "⚡ Run Agentic Investigation").disabled is False
     assert app.session_state["judge_live_investigation_unlocked"] is True
-    assert not any(item.label == "Judge PIN" for item in app.text_input)
+    assert not any(item.label == "Judge access code" for item in app.text_input)
 
     _widget(app.button, "⚡ Run Agentic Investigation").click().run()
 
     assert len(calls) == 1
-    assert "Judge PIN" not in str(calls[0])
-    assert "JUDGE_PIN_SHA256" not in str(calls[0])
+    assert "Judge access code" not in str(calls[0])
+    assert "JUDGE_ACCESS_CODE_SHA256" not in str(calls[0])
     assert "Recommendation" in [item.value for item in app.subheader]
     assert not app.exception
 
