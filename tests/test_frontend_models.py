@@ -58,6 +58,7 @@ def test_normalizes_rich_supporting_incidents_and_timings() -> None:
     assert result.confidence == 0.91
     assert result.best_similarity == 0.942
     assert result.supporting_count == 2
+    assert result.supporting_evidence_reported is True
     assert result.timings == {
         "vector_retrieval_ms": 125.4,
         "bedrock_inference_ms": 820.0,
@@ -90,6 +91,7 @@ def test_legacy_supporting_incident_ids_are_preserved_as_fallback() -> None:
     assert result.supporting_incidents == ()
     assert result.legacy_incident_ids == (INCIDENT_ID,)
     assert result.supporting_count == 1
+    assert result.supporting_evidence_reported is True
 
 
 def test_missing_confidence_and_timings_remain_unavailable() -> None:
@@ -100,6 +102,7 @@ def test_missing_confidence_and_timings_remain_unavailable() -> None:
     assert result.confidence is None
     assert result.timings == {}
     assert result.best_similarity is None
+    assert result.supporting_evidence_reported is False
     assert format_percentage(result.confidence) == "Not available"
     assert format_milliseconds(result.timings.get("total_request_ms")) == "Not available"
 
