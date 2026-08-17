@@ -150,7 +150,7 @@ def render_investigation_explanation() -> None:
     st.subheader("What just happened?")
     st.markdown(
         "**Current Incident** → **Privacy Guard** → **Titan Embedding** → "
-        "**CockroachDB Retrieval** → **Validated Evidence** → **Bedrock Investigator**"
+        "**CockroachDB Retrieval** → **Validated Evidence** → **Bedrock-powered Investigator**"
     )
     st.markdown(
         "1. The Privacy Guard pre-hook removed configured direct identifiers before AI or "
@@ -160,8 +160,8 @@ def render_investigation_explanation() -> None:
         "3. Titan embedded the sanitized symptoms and CockroachDB retrieved similar resolved "
         "operational memories.\n"
         "4. The application validated and sanitized the retrieved evidence.\n"
-        "5. The Bedrock Investigator received only controlled current symptoms and validated "
-        "historical evidence, then generated the recommendation."
+        "5. The Bedrock-powered Investigator received only controlled current symptoms and "
+        "validated historical evidence, then generated the recommendation."
     )
     st.caption(
         "The timing values shown in Execution Telemetry are live per-request measurements; "
