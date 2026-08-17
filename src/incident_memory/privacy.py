@@ -16,10 +16,10 @@ _EMAIL_PATTERN = re.compile(
     r"(?![A-Za-z0-9._%+-])"
 )
 _LABELED_PHONE_PATTERN = re.compile(
-    r"(?im)(\b(?:phone|mobile|telephone|tel)\s*[:=]\s*)([^\r\n]{7,48})"
+    r"(?im)^(\s*(?:phone|mobile|telephone|tel)\s*[:=]\s*)([^\r\n]{7,48})$"
 )
 _LABELED_NAME_PATTERN = re.compile(
-    r"(?im)(\b(?:customer\s+name|contact\s+name|name)\s*[:=]\s*)([^\r\n]{2,96})"
+    r"(?im)^(\s*(?:customer\s+name|contact\s+name|name)\s*[:=]\s*)([^\r\n]{2,96})$"
 )
 
 
