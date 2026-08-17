@@ -143,7 +143,7 @@ def test_wrong_access_code_keeps_investigation_locked_and_never_calls_api(monkey
     )
     app = _configured_app()
 
-    _unlock(app, access_code="WrongAccessCode_0123456789ABCDEFGH")
+    _unlock(app, access_code="WrongAccessCode_0123456789ABCDEFG")
 
     assert _widget(app.button, "⚡ Run Agentic Investigation").disabled is True
     assert calls == []
