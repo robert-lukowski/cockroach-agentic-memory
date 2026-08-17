@@ -17,6 +17,10 @@ from frontend.api_client import (  # noqa: E402
     FrontendConfigurationError,
     load_config,
 )
+from frontend.judge_gate import (  # noqa: E402
+    configured_access_hash,
+    verify_access_code,
+)
 from frontend.models import (  # noqa: E402
     DEMO_SCENARIOS,
     InputValidationError,
@@ -50,6 +54,8 @@ st.set_page_config(
     page_icon="🧠",
     layout="wide",
 )
+
+_JUDGE_UNLOCK_SESSION_KEY = "judge_live_investigation_unlocked"
 
 
 def _secrets() -> dict[str, object]:
@@ -88,6 +94,49 @@ def _initialize_form() -> None:
         _load_scenario()
 
 
+def _render_judge_gate(secrets: dict[str, object]) -> bool:
+    """Render the frontend-only live-analysis gate and return its session unlock state."""
+    expected_hash = configured_access_hash(secrets)
+    unlocked = st.session_state.get(_JUDGE_UNLOCK_SESSION_KEY) is True
+
+    with st.container(border=True):
+        st.markdown("**Judge live-analysis access**")
+        if expected_hash is None:
+            st.warning("Live AI investigations are locked until judge access is configured.")
+            st.caption(
+                "The public Command Center remains browseable; no analysis API request can be "
+                "triggered from this session."
+            )
+            return False
+
+        if unlocked:
+            st.success("Judge session unlocked — live AI investigations are enabled.")
+            st.caption(
+                "The unlock exists only in this Streamlit session. The access code is never sent "
+                "to the analysis API, Lambda, Bedrock, CockroachDB, or ServiceNow."
+            )
+            return True
+
+        st.caption(
+            "The Command Center is public and browseable. Enter the high-entropy judge access "
+            "code supplied with the demo to enable a live investigation and downstream AWS calls."
+        )
+        with st.form("judge_access_form"):
+            access_code = st.text_input("Judge access code", type="password")
+            unlock_requested = st.form_submit_button(
+                "Unlock live investigation",
+                use_container_width=True,
+            )
+
+        if unlock_requested:
+            if verify_access_code(access_code, expected_hash):
+                st.session_state[_JUDGE_UNLOCK_SESSION_KEY] = True
+                st.rerun()
+            st.error("The judge access code is not valid.")
+
+    return False
+
+
 def main() -> None:
     apply_command_center_theme()
     render_background_video()
@@ -95,6 +144,7 @@ def main() -> None:
     render_demo_corpus_summary()
     render_memory_pipeline()
     _initialize_form()
+    secrets = _secrets()
 
     st.subheader("Investigate an active incident")
     st.caption(
@@ -112,6 +162,8 @@ def main() -> None:
         key="scenario_key",
         on_change=_load_scenario,
     )
+
+    live_access = _render_judge_gate(secrets)
 
     with st.form("investigation_form"):
         title = st.text_input(
@@ -141,10 +193,18 @@ def main() -> None:
             "⚡ Run Agentic Investigation",
             type="primary",
             use_container_width=True,
+            disabled=not live_access,
         )
 
     if not submitted:
-        st.info("Choose a synthetic scenario or enter an incident, then run the investigation.")
+        if live_access:
+            st.info("Choose a synthetic scenario or enter an incident, then run the investigation.")
+        else:
+            st.info("Unlock judge access above to run a live investigation.")
+        return
+
+    if not live_access:
+        st.error("Live investigation access is locked.")
         return
 
     try:
@@ -156,7 +216,7 @@ def main() -> None:
             incident_number=incident_number,
         )
         payload = request.to_api_payload()
-        config = load_config(secrets=_secrets())
+        config = load_config(secrets=secrets)
         spinner_text = (
             "Applying privacy guard, retrieving memory, and generating a recommendation…"
         )
