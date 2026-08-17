@@ -187,7 +187,9 @@ def test_correct_access_code_unlocks_only_streamlit_session_and_allows_api_call(
     assert len(calls) == 1
     assert "Judge access code" not in str(calls[0])
     assert "JUDGE_ACCESS_CODE_SHA256" not in str(calls[0])
-    assert "Recommendation" in [item.value for item in app.subheader]
+    headings = [item.value for item in app.subheader]
+    assert "Agentic Memory Trace" in headings
+    assert "Recommendation" in headings
     assert not app.exception
 
 
@@ -229,6 +231,8 @@ def test_successful_investigation_renders_explanation_and_existing_panels(
     _widget(app.button, "⚡ Run Agentic Investigation").click().run()
 
     headings = [item.value for item in app.subheader]
+    assert "Agentic Memory Trace" in headings
+    assert headings.index("Agentic Memory Trace") < headings.index("Recommendation")
     assert headings.index("Recommendation") < headings.index("What just happened?")
     assert headings.index("What just happened?") < headings.index(
         "Operational Memory Graph"

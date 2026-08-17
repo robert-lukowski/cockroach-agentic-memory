@@ -196,6 +196,7 @@ class AnalysisResult:
     supporting_incidents: tuple[SupportingIncident, ...]
     legacy_incident_ids: tuple[str, ...]
     privacy_guard: PrivacyGuardResult = PrivacyGuardResult()
+    supporting_evidence_reported: bool = False
 
     @property
     def supporting_count(self) -> int:
@@ -314,8 +315,11 @@ def normalize_analysis_response(payload: object) -> AnalysisResult:
     recommendation = _optional_text(payload.get("recommendation"))
     if not recommendation:
         raise ResponseValidationError("The backend returned an empty recommendation.")
-    rich = _normalize_supporting_incidents(payload.get("supporting_incidents"))
-    legacy = _normalize_legacy_ids(payload.get("supporting_incident_ids"))
+    rich_value = payload.get("supporting_incidents")
+    legacy_value = payload.get("supporting_incident_ids")
+    rich = _normalize_supporting_incidents(rich_value)
+    legacy = _normalize_legacy_ids(legacy_value)
+    supporting_evidence_reported = isinstance(rich_value, list) or isinstance(legacy_value, list)
     return AnalysisResult(
         recommendation=recommendation,
         confidence=_optional_number(payload.get("confidence"), maximum=1.0),
@@ -323,6 +327,7 @@ def normalize_analysis_response(payload: object) -> AnalysisResult:
         supporting_incidents=rich,
         legacy_incident_ids=legacy,
         privacy_guard=_normalize_privacy_guard(payload.get("privacy_guard")),
+        supporting_evidence_reported=supporting_evidence_reported,
     )
 
 
