@@ -24,7 +24,8 @@ _PRIVACY_AUDIT_SYSTEM_PROMPT = """You are the Privacy Guard validation agent. Yo
 that has already passed deterministic direct-identifier redaction. Do not reconstruct, infer, or
 invent removed personal data. Decide only whether the sanitized text still appears to contain a
 direct personal identifier such as an email address, telephone number, or explicitly labeled human
-name. Return exactly one token: PASS or REVIEW_REQUIRED."""
+name. Placeholders such as [REDACTED_EMAIL], [REDACTED_PHONE], and [REDACTED_NAME] are safe and must
+not trigger review. Return exactly one token: PASS or REVIEW_REQUIRED."""
 
 
 class BedrockRuntimeGateway:
