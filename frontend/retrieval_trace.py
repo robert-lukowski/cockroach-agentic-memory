@@ -74,75 +74,151 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">AWS SERVERLESS EXECUTION</span>', "section"),
         (
-            'API ingress: <span class="aim-info">AMAZON API GATEWAY · REGIONAL REST API</span>',
+            "API ingress: "
+            '<span class="aim-info">AMAZON API GATEWAY · REGIONAL REST API</span>',
             "",
         ),
         ('compute: <span class="aim-ok">AWS LAMBDA · PYTHON 3.13</span>', ""),
         (
-            'model access: <span class="aim-info">AMAZON BEDROCK · IAM-SCOPED TO APPROVED MODELS</span>',
+            "model access: "
+            '<span class="aim-info">AMAZON BEDROCK · '
+            "IAM-SCOPED TO APPROVED MODELS</span>",
             "",
         ),
-        ('MCP credential: <span class="aim-info">AWS SECRETS MANAGER</span>', ""),
+        (
+            "MCP credential: "
+            '<span class="aim-info">AWS SECRETS MANAGER</span>',
+            "",
+        ),
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">TITAN TEXT EMBEDDINGS V2</span>', "section"),
-        ('embedding runtime: <span class="aim-info">AMAZON BEDROCK</span>', ""),
+        (
+            "embedding runtime: "
+            '<span class="aim-info">AMAZON BEDROCK</span>',
+            "",
+        ),
         ('semantic representation: <span class="aim-ok">GENERATED</span>', ""),
         ('vector dimensions: <span class="aim-info">1,024</span>', ""),
         ("&nbsp;", "spacer"),
         (
-            '<span class="aim-section">COCKROACHDB — TRUSTED OPERATIONAL MEMORY</span>',
+            '<span class="aim-section">COCKROACHDB — TRUSTED '
+            "OPERATIONAL MEMORY</span>",
             "section",
         ),
-        ('role: <span class="aim-ok">DURABLE OPERATIONAL MEMORY BACKBONE</span>', ""),
+        (
+            "role: "
+            '<span class="aim-ok">DURABLE OPERATIONAL MEMORY BACKBONE</span>',
+            "",
+        ),
         ('access: <span class="aim-info">CLOUD MANAGED MCP</span>', ""),
-        ('index: <span class="aim-info">DISTRIBUTED VECTOR INDEXING</span>', ""),
+        (
+            "index: "
+            '<span class="aim-info">DISTRIBUTED VECTOR INDEXING</span>',
+            "",
+        ),
         ('distance metric: <span class="aim-info">COSINE</span>', ""),
         (
-            'retrieval contract: <span class="aim-info">APPLICATION-OWNED TOP-K OVER TRUSTED MEMORY</span>',
+            "retrieval contract: "
+            '<span class="aim-info">APPLICATION-OWNED TOP-K OVER '
+            "TRUSTED MEMORY</span>",
             "",
         ),
         (
             "requested top-k: "
-            f'<span class="aim-info">{_REQUESTED_TOP_K} · APPLICATION-OWNED</span>',
+            f'<span class="aim-info">{_REQUESTED_TOP_K} · '
+            "APPLICATION-OWNED</span>",
             "",
         ),
         (f'returned memories: <span class="aim-ok">{escape(returned)}</span>', ""),
-        (f'best similarity: <span class="aim-ok">{escape(best_similarity)}</span>', ""),
-        (f'vector retrieval: <span class="aim-ok">{escape(retrieval_time)}</span>', ""),
+        (
+            f'best similarity: <span class="aim-ok">'
+            f"{escape(best_similarity)}</span>",
+            "",
+        ),
+        (
+            f'vector retrieval: <span class="aim-ok">'
+            f"{escape(retrieval_time)}</span>",
+            "",
+        ),
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">EVIDENCE CONTROL</span>', "section"),
         ('retrieved evidence: <span class="aim-ok">VALIDATED</span>', ""),
         (
-            'grounding source: <span class="aim-info">TRUSTED OPERATIONAL MEMORY</span>',
+            "grounding source: "
+            '<span class="aim-info">TRUSTED OPERATIONAL MEMORY</span>',
             "",
         ),
-        ('retrieval query: <span class="aim-info">APPLICATION-OWNED</span>', ""),
-        ('evidence selection: <span class="aim-info">APPLICATION-CONTROLLED</span>', ""),
         (
-            'evidence handoff: <span class="aim-ok">VALIDATED HISTORY → MODEL REASONING</span>',
+            "retrieval query: "
+            '<span class="aim-info">APPLICATION-OWNED</span>',
             "",
         ),
-        ('model role: <span class="aim-ok">REASON OVER PROVIDED EVIDENCE</span>', ""),
+        (
+            "evidence selection: "
+            '<span class="aim-info">APPLICATION-CONTROLLED</span>',
+            "",
+        ),
+        (
+            "evidence handoff: "
+            '<span class="aim-ok">VALIDATED HISTORY → MODEL REASONING</span>',
+            "",
+        ),
+        (
+            "model role: "
+            '<span class="aim-ok">REASON OVER PROVIDED EVIDENCE</span>',
+            "",
+        ),
         ("&nbsp;", "spacer"),
-        ('<span class="aim-section">BEDROCK-POWERED INVESTIGATOR</span>', "section"),
-        ('reasoning runtime: <span class="aim-info">AMAZON BEDROCK</span>', ""),
-        ('grounded recommendation: <span class="aim-ok">GENERATED</span>', ""),
+        (
+            '<span class="aim-section">BEDROCK-POWERED INVESTIGATOR</span>',
+            "section",
+        ),
+        (
+            "reasoning runtime: "
+            '<span class="aim-info">AMAZON BEDROCK</span>',
+            "",
+        ),
+        (
+            "grounded recommendation: "
+            '<span class="aim-ok">GENERATED</span>',
+            "",
+        ),
         (investigator_context, ""),
-        ('decision support: <span class="aim-ok">ACTIONABLE RECOMMENDATION</span>', ""),
-        ("&nbsp;", "spacer"),
-        ('<span class="aim-section">TRUSTED MEMORY LIFECYCLE</span>', "section"),
-        ('active investigation mode: <span class="aim-warn">READ-ONLY</span>', ""),
-        ('write admission: <span class="aim-info">LIFECYCLE-GATED</span>', ""),
         (
-            'trusted memory candidates: <span class="aim-info">RESOLVED / CLOSED ONLY</span>',
-            "",
-        ),
-        (
-            'durable memory target: <span class="aim-ok">COCKROACHDB TRUSTED OPERATIONAL MEMORY</span>',
+            "decision support: "
+            '<span class="aim-ok">ACTIONABLE RECOMMENDATION</span>',
             "",
         ),
         ("&nbsp;", "spacer"),
-        ('<span class="aim-finish">Investigation path complete.</span>', "finish"),
+        (
+            '<span class="aim-section">TRUSTED MEMORY LIFECYCLE</span>',
+            "section",
+        ),
+        (
+            "active investigation mode: "
+            '<span class="aim-warn">READ-ONLY</span>',
+            "",
+        ),
+        (
+            "write admission: "
+            '<span class="aim-info">LIFECYCLE-GATED</span>',
+            "",
+        ),
+        (
+            "trusted memory candidates: "
+            '<span class="aim-info">RESOLVED / CLOSED ONLY</span>',
+            "",
+        ),
+        (
+            "durable memory target: "
+            '<span class="aim-ok">COCKROACHDB TRUSTED OPERATIONAL MEMORY</span>',
+            "",
+        ),
+        ("&nbsp;", "spacer"),
+        (
+            '<span class="aim-finish">Investigation path complete.</span>',
+            "finish",
+        ),
         (f'<span class="aim-muted">{escape(closing_summary)}</span>', "note"),
     ]
     lines = "".join(
