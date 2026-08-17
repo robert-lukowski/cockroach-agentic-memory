@@ -66,3 +66,18 @@ class ExternalServiceError(ApplicationError):
             status_code=502,
             details={"dependency": dependency},
         )
+
+
+class PrivacyReviewRequiredError(ApplicationError):
+    """Raised when the secondary privacy agent will not release sanitized text downstream."""
+
+    def __init__(self, *, redactions: int, categories: tuple[str, ...]) -> None:
+        super().__init__(
+            "Privacy Guard requires human review before AI processing can continue.",
+            code="privacy_review_required",
+            status_code=422,
+            details={
+                "redactions": redactions,
+                "categories": list(categories),
+            },
+        )
