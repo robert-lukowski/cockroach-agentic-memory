@@ -25,6 +25,31 @@ def _terminal_line(content: str, *, index: int, class_name: str = "") -> str:
     )
 
 
+def _history_narrative(result: AnalysisResult) -> tuple[str, str, str]:
+    supporting_evidence_reported = getattr(result, "supporting_evidence_reported", False)
+    supporting_count = getattr(result, "supporting_count", 0)
+
+    if supporting_evidence_reported and supporting_count > 0:
+        return (
+            str(supporting_count),
+            'context: current incident + <span class="aim-ok">trusted operational memory</span>',
+            "Trusted history retrieved. Evidence controlled. Recommendation grounded.",
+        )
+
+    if supporting_evidence_reported:
+        return (
+            str(supporting_count),
+            'context: current incident · <span class="aim-info">no matching trusted memory</span>',
+            "No matching trusted history found. Evidence controlled. Recommendation grounded.",
+        )
+
+    return (
+        "Not available",
+        'context: current incident + <span class="aim-info">governed operational-memory retrieval</span>',
+        "Operational-memory retrieval completed. Evidence controlled. Recommendation grounded.",
+    )
+
+
 def _retrieval_trace_html(result: AnalysisResult) -> str:
     timings = getattr(result, "timings", {})
     retrieval_ms = timings.get("vector_retrieval_ms") if isinstance(timings, dict) else None
@@ -33,12 +58,7 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         if isinstance(retrieval_ms, int | float) and not isinstance(retrieval_ms, bool)
         else "Not available"
     )
-    supporting_evidence_reported = getattr(result, "supporting_evidence_reported", False)
-    returned = (
-        str(getattr(result, "supporting_count", 0))
-        if supporting_evidence_reported
-        else "Not available"
-    )
+    returned, investigator_context, closing_summary = _history_narrative(result)
     best_similarity = format_percentage(getattr(result, "best_similarity", None))
 
     rows: list[tuple[str, str]] = [
@@ -90,7 +110,7 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">BEDROCK-POWERED INVESTIGATOR</span>', "section"),
         ('grounded recommendation: <span class="aim-ok">GENERATED</span>', ""),
-        ('context: current incident + <span class="aim-ok">trusted operational memory</span>', ""),
+        (investigator_context, ""),
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">TRUSTED MEMORY LIFECYCLE</span>', "section"),
         ('active investigation mode: <span class="aim-warn">READ-ONLY</span>', ""),
@@ -98,11 +118,7 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         ('trusted memory candidates: <span class="aim-info">RESOLVED / CLOSED ONLY</span>', ""),
         ("&nbsp;", "spacer"),
         ('<span class="aim-finish">Investigation path complete.</span>', "finish"),
-        (
-            '<span class="aim-muted">Trusted history retrieved. Evidence controlled. '
-            'Recommendation grounded.</span>',
-            "note",
-        ),
+        (f'<span class="aim-muted">{escape(closing_summary)}</span>', "note"),
     ]
     lines = "".join(
         _terminal_line(content, index=index, class_name=class_name)
