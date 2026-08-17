@@ -32,7 +32,6 @@ from frontend.privacy_ui import (  # noqa: E402
     render_investigation_explanation,
     render_privacy_guard,
 )
-from frontend.retrieval_trace import render_retrieval_trace  # noqa: E402
 from frontend.ui_components import (  # noqa: E402
     render_demo_corpus_summary,
     render_metrics,
@@ -255,7 +254,6 @@ def main() -> None:
     )
     render_metrics(result, round_trip_ms=api_result.round_trip_ms)
     render_timings(result)
-    render_retrieval_trace(result)
     render_privacy_guard(result)
     render_recommendation(result)
     render_investigation_explanation()
