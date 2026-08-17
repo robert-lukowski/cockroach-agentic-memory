@@ -16,7 +16,11 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         if isinstance(retrieval_ms, int | float) and not isinstance(retrieval_ms, bool)
         else "Not available"
     )
-    returned = str(result.supporting_count) if result.supporting_evidence_reported else "Not available"
+    returned = (
+        str(result.supporting_count)
+        if result.supporting_evidence_reported
+        else "Not available"
+    )
     return f"""
     <style>
       .aim-retrieval-trace {{
