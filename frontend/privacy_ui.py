@@ -6,7 +6,7 @@ from html import escape
 
 import streamlit as st
 
-from frontend.models import AnalysisResult, format_milliseconds
+from frontend.models import AnalysisResult, PrivacyGuardResult, format_milliseconds
 
 _ARCHITECTURE_URL = "https://github.com/robert-lukowski/cockroach-agentic-memory#architecture"
 _AUTOMATION_URL = (
@@ -16,7 +16,10 @@ _AUTOMATION_URL = (
 
 
 def _privacy_guard_html(result: AnalysisResult) -> str:
-    guard = result.privacy_guard
+    # Streamlit Cloud can keep an in-flight object created by the previous app version
+    # during a hot reload. Treat missing additive metadata as unavailable instead of
+    # crashing the entire result page.
+    guard = getattr(result, "privacy_guard", PrivacyGuardResult())
     if guard.status == "not_available":
         return ""
 
@@ -48,7 +51,8 @@ def _privacy_guard_html(result: AnalysisResult) -> str:
 
     categories = " · ".join(category.upper() for category in guard.categories) or "NONE"
     reviewed = "Yes" if guard.ai_reviewed else "No"
-    guard_ms = result.timings.get("privacy_guard_ms")
+    timings = getattr(result, "timings", {})
+    guard_ms = timings.get("privacy_guard_ms") if isinstance(timings, dict) else None
     timing_pill = (
         f'<span class="aim-privacy-pill">Guard time {format_milliseconds(guard_ms)}</span>'
         if guard_ms is not None
