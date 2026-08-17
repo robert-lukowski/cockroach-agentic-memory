@@ -14,9 +14,9 @@ from frontend.models import (
 )
 
 _REQUESTED_TOP_K = 5
-_INITIAL_REPLAY_DELAY_MS = 900
-_LINE_DELAY_MS = 70
-_LINE_REVEAL_MS = 110
+_INITIAL_REPLAY_DELAY_MS = 1_200
+_LINE_DELAY_MS = 140
+_LINE_REVEAL_MS = 140
 
 
 def _privacy_trace(result: AnalysisResult) -> tuple[str, str]:
@@ -43,9 +43,22 @@ def _privacy_trace(result: AnalysisResult) -> tuple[str, str]:
     return f"REDACTION ENFORCED · {guard.redactions} field(s)", "warn"
 
 
+def _privacy_input_line(result: AnalysisResult) -> str:
+    guard = getattr(result, "privacy_guard", PrivacyGuardResult())
+    if guard.status == "not_available":
+        return (
+            "privacy policy: "
+            '<span class="aim-info">SANITIZE BEFORE DOWNSTREAM AI</span>'
+        )
+    return (
+        "downstream AI input: "
+        '<span class="aim-ok">SANITIZED CONTEXT ONLY</span>'
+    )
+
+
 def _terminal_line(content: str, *, index: int, class_name: str = "") -> str:
-    # Give Streamlit's rerun a short settle window before the first line appears.
-    # The browser then reveals each already-completed step in sequence. This keeps
+    # Give Streamlit's rerun a settle window before the first line appears. The
+    # browser then reveals each already-completed step in sequence. This keeps
     # the trace visibly progressive without pretending the replay is a live log.
     delay_ms = _INITIAL_REPLAY_DELAY_MS + (index * _LINE_DELAY_MS)
     classes = "aim-terminal-line"
@@ -88,11 +101,7 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
             f'<span class="aim-{privacy_class}">{escape(privacy_detail)}</span>',
             "",
         ),
-        (
-            "input to downstream AI: "
-            '<span class="aim-ok">SANITIZED CONTEXT ONLY</span>',
-            "",
-        ),
+        (_privacy_input_line(result), ""),
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">TITAN TEXT EMBEDDINGS V2</span>', "section"),
         ('embedding: <span class="aim-ok">GENERATED</span>', ""),
@@ -128,22 +137,26 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">EVIDENCE CONTROL</span>', "section"),
         ('retrieved evidence: <span class="aim-ok">VALIDATED</span>', ""),
-        ('model-selected SQL: <span class="aim-no">NO</span>', ""),
-        ('model-selected evidence IDs: <span class="aim-no">NO</span>', ""),
+        ('retrieval query: <span class="aim-info">APPLICATION-OWNED</span>', ""),
+        (
+            'evidence selection: <span class="aim-info">APPLICATION-CONTROLLED</span>',
+            "",
+        ),
+        (
+            'model role: <span class="aim-ok">REASON OVER PROVIDED EVIDENCE</span>',
+            "",
+        ),
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">BEDROCK-POWERED INVESTIGATOR</span>', "section"),
         ('grounded recommendation: <span class="aim-ok">GENERATED</span>', ""),
         ("context: current incident + validated operational memory", ""),
         ("&nbsp;", "spacer"),
         ('<span class="aim-section">MEMORY POLICY</span>', "section"),
-        ('active investigation: <span class="aim-warn">READ ONLY</span>', ""),
+        ('active investigation mode: <span class="aim-warn">READ-ONLY</span>', ""),
+        ('write admission: <span class="aim-info">LIFECYCLE-GATED</span>', ""),
         (
-            'durable memory write: <span class="aim-no">DISABLED FOR ACTIVE INCIDENT</span>',
-            "",
-        ),
-        (
-            "admission path: "
-            '<span class="aim-info">RESOLVED / CLOSED synchronization only</span>',
+            "trusted memory candidates: "
+            '<span class="aim-info">RESOLVED / CLOSED ONLY</span>',
             "",
         ),
         ("&nbsp;", "spacer"),
