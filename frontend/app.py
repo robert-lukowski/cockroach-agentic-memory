@@ -17,7 +17,10 @@ from frontend.api_client import (  # noqa: E402
     FrontendConfigurationError,
     load_config,
 )
-from frontend.judge_gate import configured_pin_hash, verify_pin  # noqa: E402
+from frontend.judge_gate import (  # noqa: E402
+    configured_access_hash,
+    verify_access_code,
+)
 from frontend.models import (  # noqa: E402
     DEMO_SCENARIOS,
     InputValidationError,
@@ -93,7 +96,7 @@ def _initialize_form() -> None:
 
 def _render_judge_gate(secrets: dict[str, object]) -> bool:
     """Render the frontend-only live-analysis gate and return its session unlock state."""
-    expected_hash = configured_pin_hash(secrets)
+    expected_hash = configured_access_hash(secrets)
     unlocked = st.session_state.get(_JUDGE_UNLOCK_SESSION_KEY) is True
 
     with st.container(border=True):
@@ -109,27 +112,27 @@ def _render_judge_gate(secrets: dict[str, object]) -> bool:
         if unlocked:
             st.success("Judge session unlocked — live AI investigations are enabled.")
             st.caption(
-                "The unlock exists only in this Streamlit session. The PIN is never sent to the "
-                "analysis API, Lambda, Bedrock, CockroachDB, or ServiceNow."
+                "The unlock exists only in this Streamlit session. The access code is never sent "
+                "to the analysis API, Lambda, Bedrock, CockroachDB, or ServiceNow."
             )
             return True
 
         st.caption(
-            "The Command Center is public and browseable. Enter the judge PIN to enable a live "
-            "investigation and its downstream AWS calls."
+            "The Command Center is public and browseable. Enter the high-entropy judge access "
+            "code supplied with the demo to enable a live investigation and downstream AWS calls."
         )
         with st.form("judge_access_form"):
-            pin = st.text_input("Judge PIN", type="password")
+            access_code = st.text_input("Judge access code", type="password")
             unlock_requested = st.form_submit_button(
                 "Unlock live investigation",
                 use_container_width=True,
             )
 
         if unlock_requested:
-            if verify_pin(pin, expected_hash):
+            if verify_access_code(access_code, expected_hash):
                 st.session_state[_JUDGE_UNLOCK_SESSION_KEY] = True
                 st.rerun()
-            st.error("The judge PIN is not valid.")
+            st.error("The judge access code is not valid.")
 
     return False
 
