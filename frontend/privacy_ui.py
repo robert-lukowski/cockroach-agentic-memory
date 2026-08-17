@@ -8,6 +8,12 @@ import streamlit as st
 
 from frontend.models import AnalysisResult
 
+_ARCHITECTURE_URL = "https://github.com/robert-lukowski/cockroach-agentic-memory#architecture"
+_AUTOMATION_URL = (
+    "https://github.com/robert-lukowski/cockroach-agentic-memory/"
+    "actions/workflows/generate-demo-incident.yml"
+)
+
 
 def _privacy_guard_html(result: AnalysisResult) -> str:
     guard = result.privacy_guard
@@ -49,26 +55,57 @@ def _privacy_guard_html(result: AnalysisResult) -> str:
         border-radius: 1rem;
         padding: 1rem 1.05rem;
         margin: 0.2rem 0 1rem;
-        background: linear-gradient(145deg, rgba(6, 78, 59, 0.22), rgba(8, 17, 32, 0.88));
+        background:
+          linear-gradient(145deg, rgba(6, 78, 59, 0.22), rgba(8, 17, 32, 0.88));
         box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
       }}
       .aim-privacy-header {{
-        display:flex; justify-content:space-between; align-items:center; gap:0.8rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.8rem;
       }}
       .aim-privacy-agent {{
-        color:#86EFAC; font-size:0.72rem; font-weight:800; letter-spacing:0.11em;
-        text-transform:uppercase;
+        color: #86EFAC;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
       }}
       .aim-privacy-badge {{
-        border:1px solid rgba(34,197,94,0.35); border-radius:999px; padding:0.28rem 0.55rem;
-        color:#BBF7D0; background:rgba(22,101,52,0.18); font-size:0.68rem; font-weight:760;
+        border: 1px solid rgba(34, 197, 94, 0.35);
+        border-radius: 999px;
+        padding: 0.28rem 0.55rem;
+        color: #BBF7D0;
+        background: rgba(22, 101, 52, 0.18);
+        font-size: 0.68rem;
+        font-weight: 760;
       }}
-      .aim-privacy-title {{ color:#F8FAFC; font-size:1rem; font-weight:760; margin-top:0.7rem; }}
-      .aim-privacy-detail {{ color:#CBD5E1; font-size:0.78rem; line-height:1.5; margin-top:0.35rem; }}
-      .aim-privacy-meta {{ display:flex; flex-wrap:wrap; gap:0.45rem; margin-top:0.7rem; }}
+      .aim-privacy-title {{
+        color: #F8FAFC;
+        font-size: 1rem;
+        font-weight: 760;
+        margin-top: 0.7rem;
+      }}
+      .aim-privacy-detail {{
+        color: #CBD5E1;
+        font-size: 0.78rem;
+        line-height: 1.5;
+        margin-top: 0.35rem;
+      }}
+      .aim-privacy-meta {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-top: 0.7rem;
+      }}
       .aim-privacy-pill {{
-        border:1px solid rgba(148,163,184,0.18); border-radius:999px; padding:0.28rem 0.5rem;
-        color:#CBD5E1; background:rgba(15,23,42,0.55); font-size:0.68rem;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 999px;
+        padding: 0.28rem 0.5rem;
+        color: #CBD5E1;
+        background: rgba(15, 23, 42, 0.55);
+        font-size: 0.68rem;
       }}
     </style>
     <section class="aim-privacy-card" aria-label="Privacy Guard Agent result">
@@ -95,3 +132,43 @@ def render_privacy_guard(result: AnalysisResult) -> None:
     st.subheader("Privacy Guard")
     st.caption("Pre-AI privacy boundary for the completed investigation request.")
     st.html(html)
+
+
+def render_investigation_explanation() -> None:
+    """Explain the real stage order including the privacy boundary."""
+    st.subheader("What just happened?")
+    st.markdown(
+        "**Current Incident** → **Privacy Guard** → **Titan Embedding** → "
+        "**CockroachDB Retrieval** → **Validated Evidence** → **Bedrock Investigator**"
+    )
+    st.markdown(
+        "1. The Privacy Guard pre-hook removed configured direct identifiers before AI or "
+        "vector processing.\n"
+        "2. If redaction was needed, the secondary Bedrock Privacy Guard agent reviewed only "
+        "the sanitized payload.\n"
+        "3. Titan embedded the sanitized symptoms and CockroachDB retrieved similar resolved "
+        "operational memories.\n"
+        "4. The application validated and sanitized the retrieved evidence.\n"
+        "5. The Bedrock Investigator received only controlled current symptoms and validated "
+        "historical evidence, then generated the recommendation."
+    )
+    st.caption(
+        "The timing values shown in Execution Telemetry are live per-request measurements; "
+        "this stage description is not a distributed trace."
+    )
+    st.caption(
+        "Trust boundary: models do not choose SQL, memory scope, or returned incident IDs. "
+        "The Privacy Guard agent cannot access CockroachDB and never receives removed values. "
+        "Only resolved or closed incidents become operational memory."
+    )
+    architecture, automation = st.columns(2)
+    architecture.link_button(
+        "View Architecture on GitHub",
+        _ARCHITECTURE_URL,
+        use_container_width=True,
+    )
+    automation.link_button(
+        "View Automation on GitHub",
+        _AUTOMATION_URL,
+        use_container_width=True,
+    )
