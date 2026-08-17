@@ -14,6 +14,7 @@ class _LegacyAnalysisResult:
     timings = {"vector_retrieval_ms": 12.5}
     supporting_count = 3
     best_similarity = 0.87
+    recommendation = "Use validated evidence."
 
 
 def test_retrieval_trace_tolerates_legacy_result_without_additive_metadata() -> None:
@@ -60,9 +61,13 @@ def test_retrieval_trace_centers_cockroachdb_and_governed_evidence() -> None:
 
     assert "COCKROACHDB — TRUSTED OPERATIONAL MEMORY" in html
     assert "DURABLE OPERATIONAL MEMORY BACKBONE" in html
-    assert "Distributed Vector Indexing" in html
+    assert "DISTRIBUTED VECTOR INDEXING" in html
+    assert "retrieval contract:" in html
+    assert "APPLICATION-OWNED TOP-K OVER TRUSTED MEMORY" in html
     assert "retrieved evidence:" in html
     assert "VALIDATED" in html
+    assert "grounding source:" in html
+    assert "TRUSTED OPERATIONAL MEMORY" in html
     assert "retrieval query:" in html
     assert "APPLICATION-OWNED" in html
     assert "evidence selection:" in html
@@ -74,6 +79,33 @@ def test_retrieval_trace_centers_cockroachdb_and_governed_evidence() -> None:
     assert "trusted memory candidates:" in html
     assert "RESOLVED / CLOSED ONLY" in html
     assert "PRIVACY BOUNDARY" not in html
+
+
+def test_retrieval_trace_surfaces_real_aws_execution_architecture() -> None:
+    legacy_result = cast(AnalysisResult, _LegacyAnalysisResult())
+
+    html = _retrieval_trace_html(legacy_result)
+
+    assert "AWS SERVERLESS EXECUTION" in html
+    assert "AMAZON API GATEWAY · REGIONAL REST API" in html
+    assert "AWS LAMBDA · PYTHON 3.13" in html
+    assert "AMAZON BEDROCK · IAM-SCOPED TO APPROVED MODELS" in html
+    assert "AWS SECRETS MANAGER" in html
+    assert "embedding runtime:" in html
+    assert "reasoning runtime:" in html
+    assert "AMAZON BEDROCK" in html
+
+
+def test_retrieval_trace_remains_a_single_terminal_pane() -> None:
+    legacy_result = cast(AnalysisResult, _LegacyAnalysisResult())
+
+    html = _retrieval_trace_html(legacy_result)
+
+    assert "LIVE RESULT SUMMARY" not in html
+    assert "PLATFORM ADVANTAGE" not in html
+    assert "aim-summary" not in html
+    assert "aim-terminal-grid" not in html
+    assert '<div class="aim-terminal-body">' in html
 
 
 def test_retrieval_trace_does_not_claim_history_when_no_memory_matches() -> None:
@@ -119,3 +151,14 @@ def test_retrieval_trace_keeps_matching_runtime_values_visible() -> None:
     assert 'vector retrieval: <span class="aim-ok">12 ms</span>' in html
     assert "trusted operational memory" in html
     assert "Trusted history retrieved." in html
+
+
+def test_retrieval_trace_does_not_invent_performance_claims() -> None:
+    legacy_result = cast(AnalysisResult, _LegacyAnalysisResult())
+
+    html = _retrieval_trace_html(legacy_result)
+
+    assert "99.9%" not in html
+    assert "SLA" not in html
+    assert "faster" not in html.lower()
+    assert "cost savings" not in html.lower()
