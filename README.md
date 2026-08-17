@@ -5,8 +5,8 @@
 
 [![Live Demo](https://img.shields.io/badge/Streamlit-Live%20Demo-FF4B4B?logo=streamlit&logoColor=white)](https://agentic-incident-command-center.streamlit.app)
 ![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-243%20passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-92.26%25-brightgreen)
+![Tests](https://img.shields.io/badge/tests-256%20passing-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-91.95%25-brightgreen)
 ![CockroachDB](https://img.shields.io/badge/CockroachDB-operational%20memory-6933FF?logo=cockroachlabs&logoColor=white)
 ![Amazon Bedrock](https://img.shields.io/badge/Amazon%20Bedrock-grounded%20generation-232F3E)
 ![ServiceNow](https://img.shields.io/badge/ServiceNow-integrated-81B5A1?logo=servicenow&logoColor=white)
@@ -41,6 +41,31 @@ CockroachDB is the durable retrieval layer, not just a log store. Application co
 retrieval, validation, privacy redaction, and evidence selection. Models never choose SQL, memory
 scope, or supporting incident IDs.
 
+## Trusted operational memory lifecycle
+
+The system separates **read-only investigation** from the **trusted-memory write lifecycle**. An
+active incident can retrieve historical evidence, but it cannot become durable memory merely because
+a model produced a plausible hypothesis. Only resolved or closed incidents enter the controlled
+synchronization path, where configured direct identifiers are sanitized before embedding generation
+and persistence.
+
+<p align="center">
+  <img src="docs/trusted-operational-memory-lifecycle.svg" alt="Trusted Operational Memory Lifecycle showing privacy-protected investigation and resolved-only CockroachDB memory ingestion" width="100%" />
+</p>
+
+### Why CockroachDB matters to the architecture
+
+CockroachDB is deliberately more than a vector-search accessory in this project. It is the durable
+system of record for **trusted operational memory**: the verified incident record, provenance,
+lifecycle context, and semantic vector representation remain part of one consistent memory model.
+Distributed Vector Indexing then retrieves the most relevant verified resolutions for the next
+incident, while CockroachDB Cloud Managed MCP provides the constrained application-owned access path.
+
+That design keeps deterministic controls around probabilistic AI. The application decides what may
+be remembered, what scope may be searched, how many memories may be returned, and which records
+become evidence. The model reasons over validated evidence; it does not become the database control
+plane.
+
 ## Current proof points
 
 | Project evidence | Current value |
@@ -49,8 +74,8 @@ scope, or supporting incident IDs.
 | Resolved incidents synchronized as operational memory | **50** |
 | Active scenarios retained for investigation | **10** |
 | Supporting resolved incidents per ServiceNow investigation | **Up to 5** |
-| Automated tests | **243 passing** |
-| Test coverage | **92.26%** |
+| Automated tests | **256 passing** |
+| Test coverage | **91.95%** |
 | Static AWS access keys required by GitHub → AWS OIDC automation | **0** |
 
 ## Architecture
@@ -150,6 +175,8 @@ Managed MCP, AWS credentials, or ServiceNow. It supports:
 - an Operational Memory Graph with readable incident-number and service labels;
 - root-cause, resolution, and similarity detail for retrieved historical memories;
 - a static Verified Security Controls scorecard, clearly separated from live telemetry;
+- a high-entropy judge access gate for live cloud-backed investigations while keeping the UI
+  browseable;
 - exactly one safe automatic retry after a transient HTTP `502` or `503`;
 - sanitized configuration, transport, and response errors.
 
@@ -169,8 +196,8 @@ remain available.
 The same concept can be demonstrated end-to-end in ServiceNow. The GitHub workflow supports a manual
 `privacy-guard` scenario that creates one active synthetic ServiceNow incident using the existing
 OIDC → Secrets Manager → ServiceNow automation. After creation, use the existing **Analyze with
-Agentic Memory** action in ServiceNow. No Streamlit PIN or additional ServiceNow permission is
-required for the analysis path.
+Agentic Memory** action in ServiceNow. No Streamlit judge access code or additional ServiceNow
+permission is required for the analysis path.
 
 ## ServiceNow integration
 
@@ -183,7 +210,7 @@ supporting incidents** → **readable `work_notes`**
 The API still accepts the same fixed 12-field request contract. It applies the deployment-owned
 memory scope and `top_k=5`; callers cannot select scope, filters, retrieval count, MCP tool, or SQL.
 Privacy metadata and timings are additive response fields, so the existing ServiceNow analysis path
-is not gated by Streamlit state or a judge PIN.
+is not gated by Streamlit state or a judge access code.
 
 The scoped application source is maintained separately in
 [`agentic-incident-memory-servicenow`](https://github.com/robert-lukowski/agentic-incident-memory-servicenow).
@@ -206,6 +233,7 @@ Concrete controls include:
 - sanitized logs and frontend errors that do not echo request bodies, credentials, provider
   responses, SQL, or model output;
 - API usage-plan throttling/quota for the ServiceNow route;
+- high-entropy access-code protection for public live demo execution;
 - one bounded frontend retry for transient `502`/`503` failures;
 - CI running Ruff and the full pytest suite on pull requests.
 
