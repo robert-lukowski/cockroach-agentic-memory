@@ -131,8 +131,9 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
       </div>
       <div class="aim-retrieval-footnote">
         Returned-memory count and vector-retrieval latency are request-derived when available.
-        Index, vector, access-path, and control labels describe the reviewed deployment architecture;
-        resolved/closed admission is enforced by the controlled synchronization workflow.
+        Index, vector, access-path, and control labels describe the reviewed deployment
+        architecture; resolved/closed admission is enforced by the controlled synchronization
+        workflow.
       </div>
     </section>
     """
