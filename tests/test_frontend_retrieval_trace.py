@@ -33,9 +33,23 @@ def test_retrieval_trace_replays_at_deliberate_judge_pacing() -> None:
 
     assert "--aim-line-delay:1200ms" in html
     assert "--aim-line-delay:1340ms" in html
-    assert "140ms steps(2, end) forwards" in html
+    assert "140ms steps(1, end) forwards" in html
+    assert "visibility: hidden" in html
     assert "prefers-reduced-motion: reduce" in html
     assert "<script" not in html.lower()
+
+
+def test_retrieval_trace_uses_blue_control_center_terminal_theme() -> None:
+    legacy_result = cast(AnalysisResult, _LegacyAnalysisResult())
+
+    html = _retrieval_trace_html(legacy_result)
+
+    assert "background: #012456" in html
+    assert "border: 1px solid rgba(255, 255, 255, 0.38)" in html
+    assert "agentic-memory — PowerShell" in html
+    assert "PS Agentic-Memory&gt;" in html
+    assert "#facc15" not in html
+    assert "#050505" not in html
 
 
 def test_retrieval_trace_centers_cockroachdb_and_governed_evidence() -> None:
