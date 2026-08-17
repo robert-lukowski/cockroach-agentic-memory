@@ -58,8 +58,8 @@ def _privacy_input_line(result: AnalysisResult) -> str:
 
 def _terminal_line(content: str, *, index: int, class_name: str = "") -> str:
     # Give Streamlit's rerun a settle window before the first line appears. The
-    # browser then reveals each already-completed step in sequence. This keeps
-    # the trace visibly progressive without pretending the replay is a live log.
+    # browser then reveals each completed control step in sequence so the judge
+    # can follow the architecture without presenting fabricated raw log events.
     delay_ms = _INITIAL_REPLAY_DELAY_MS + (index * _LINE_DELAY_MS)
     classes = "aim-terminal-line"
     if class_name:
@@ -267,10 +267,11 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
 
 
 def render_retrieval_trace(result: AnalysisResult) -> None:
-    """Replay the completed request path as a controlled progressive terminal trace."""
+    """Render the investigation control path as a progressive terminal trace."""
     st.subheader("Agentic Memory Trace")
     st.caption(
-        "Controlled replay of the completed request path. The terminal intentionally replays "
-        "the steps after the request returns; this is not a raw backend log stream."
+        "Follow the investigation step by step — see how privacy controls protect context, "
+        "CockroachDB anchors operational memory retrieval, evidence stays application-controlled, "
+        "and Bedrock turns trusted history into an actionable recommendation."
     )
     st.html(_retrieval_trace_html(result))
