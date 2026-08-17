@@ -10,6 +10,7 @@ from uuid import uuid4
 
 _INCIDENT_NUMBER = re.compile(r"INC[0-9]{7,37}")
 _TIMING_ALIASES = {
+    "privacy_guard_ms": ("privacy_guard_ms", "privacy_ms"),
     "vector_retrieval_ms": (
         "vector_retrieval_ms",
         "retrieval_ms",
@@ -60,6 +61,21 @@ DEMO_SCENARIOS = (
             "sometimes succeeds."
         ),
         service="connect-outbound-orchestrator",
+        environment="development",
+    ),
+    DemoScenario(
+        key="privacy-guard",
+        label="Privacy Guard — incident with synthetic personal data",
+        incident_number="INC9000099",
+        title="Customer notification requests time out after deployment",
+        symptoms=(
+            "A customer reports repeated notification timeouts after the latest deployment.\n"
+            "Name: Alex Morgan\n"
+            "Email: alex.morgan@example.invalid\n"
+            "Phone: +1 202-555-0147\n"
+            "The notification worker retries successfully after several minutes."
+        ),
+        service="notification-orchestrator",
         environment="development",
     ),
     DemoScenario(
@@ -165,12 +181,21 @@ class SupportingIncident:
 
 
 @dataclass(frozen=True, slots=True)
+class PrivacyGuardResult:
+    status: str = "not_available"
+    redactions: int = 0
+    categories: tuple[str, ...] = ()
+    ai_reviewed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisResult:
     recommendation: str
     confidence: float | None
     timings: dict[str, float]
     supporting_incidents: tuple[SupportingIncident, ...]
     legacy_incident_ids: tuple[str, ...]
+    privacy_guard: PrivacyGuardResult = PrivacyGuardResult()
 
     @property
     def supporting_count(self) -> int:
@@ -212,6 +237,39 @@ def _normalize_timings(value: object) -> dict[str, float]:
                 normalized[canonical] = numeric
                 break
     return normalized
+
+
+def _normalize_privacy_guard(value: object) -> PrivacyGuardResult:
+    if not isinstance(value, dict):
+        return PrivacyGuardResult()
+    status = _optional_text(value.get("status"), fallback="not_available")
+    redactions_value = value.get("redactions")
+    redactions = (
+        redactions_value
+        if (
+            isinstance(redactions_value, int)
+            and not isinstance(redactions_value, bool)
+            and redactions_value >= 0
+        )
+        else 0
+    )
+    categories_value = value.get("categories")
+    categories = (
+        tuple(
+            item.strip()
+            for item in categories_value
+            if isinstance(item, str) and item.strip()
+        )
+        if isinstance(categories_value, list)
+        else ()
+    )
+    ai_reviewed = value.get("ai_reviewed") is True
+    return PrivacyGuardResult(
+        status=status,
+        redactions=redactions,
+        categories=categories,
+        ai_reviewed=ai_reviewed,
+    )
 
 
 def _normalize_supporting_incidents(value: object) -> tuple[SupportingIncident, ...]:
@@ -264,6 +322,7 @@ def normalize_analysis_response(payload: object) -> AnalysisResult:
         timings=_normalize_timings(payload.get("timings")),
         supporting_incidents=rich,
         legacy_incident_ids=legacy,
+        privacy_guard=_normalize_privacy_guard(payload.get("privacy_guard")),
     )
 
 

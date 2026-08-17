@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: Optional active demo cluster name
-        required: false
-        type: string
+        description: Demo incident scenario
+        required: true
+        default: random
+        type: choice
+        options:
+          - random
+          - privacy-guard
   schedule:
     - cron: "0 */6 * * *"
 
@@ -55,20 +59,55 @@ jobs:
         env:
           SERVICENOW_SECRET_ID: ${{ vars.SERVICENOW_SECRET_ID }}
           SERVICENOW_CALLER_MODE: random
-          SCENARIO: ${{ github.event.inputs.scenario || '' }}
+          SCENARIO: ${{ github.event.inputs.scenario || 'random' }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           secret_file="$(mktemp "$RUNNER_TEMP/servicenow-secret.XXXXXX")"
-          trap 'rm -f "$secret_file"' EXIT
+          privacy_dataset="$(mktemp "$RUNNER_TEMP/privacy-demo.XXXXXX")"
+          trap 'rm -f "$secret_file" "$privacy_dataset"' EXIT
+
           aws secretsmanager get-secret-value \
             --region eu-central-1 \
             --secret-id "$SERVICENOW_SECRET_ID" \
             --query SecretString \
             --output text > "$secret_file"
+
           arguments=(--secret-file "$secret_file")
-          if [[ -n "$SCENARIO" ]]; then
-            arguments+=(--scenario "$SCENARIO")
+          if [[ "$SCENARIO" == "privacy-guard" ]]; then
+            cat > "$privacy_dataset" <<'JSON'
+          [
+            {
+              "source_id": "servicenow:privacy-demo:00000000000000000000000000000099",
+              "incident_sys_id": "00000000000000000000000000000099",
+              "number": "INC9000099",
+              "state": "In Progress",
+              "active": true,
+              "short_description": "Customer notification requests time out after deployment",
+              "description": "A customer reports repeated notification timeouts after the latest deployment.\nName: Alex Morgan\nEmail: alex.morgan@example.invalid\nPhone: +1 202-555-0147\nThe notification worker retries successfully after several minutes.",
+              "category": "Software",
+              "subcategory": "Application",
+              "priority": "2 - High",
+              "impact": "2 - Medium",
+              "urgency": "2 - Medium",
+              "assignment_group": "Cloud Platform Operations",
+              "cmdb_ci": "notification-orchestrator",
+              "opened_at": "2026-08-17T09:00:00Z",
+              "resolved_at": null,
+              "close_code": null,
+              "close_notes": null,
+              "root_cause": null,
+              "resolution": null,
+              "tags": ["cluster:privacy-guard", "privacy", "pii", "bedrock", "synthetic"],
+              "synthetic": true
+            }
+          ]
+          JSON
+            arguments+=(--dataset "$privacy_dataset" --scenario privacy-guard)
+          elif [[ "$SCENARIO" != "random" ]]; then
+            echo "Unsupported demo scenario." >&2
+            exit 2
           fi
+
           python scripts/generate_scheduled_incident.py "${arguments[@]}"

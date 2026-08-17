@@ -1,4 +1,4 @@
-"""Live Amazon Bedrock adapter for embeddings and grounded generation."""
+"""Live Amazon Bedrock adapter for embeddings, grounded generation, and privacy audit."""
 
 from __future__ import annotations
 
@@ -19,6 +19,13 @@ list of concrete diagnostic and remediation steps. Do not use Markdown tables, p
 HTML, or other wide formatting. Do not list or repeat incident IDs or incident numbers because the
 application returns supporting evidence separately. Do not invent causes, commands, or observations.
 If evidence is insufficient, say so."""
+
+_PRIVACY_AUDIT_SYSTEM_PROMPT = """You are the Privacy Guard validation agent. You receive only text
+that has already passed deterministic direct-identifier redaction. Do not reconstruct, infer, or
+invent removed personal data. Decide only whether the sanitized text still appears to contain a
+direct personal identifier such as an email address, telephone number, or explicitly labeled human
+name. Placeholders such as [REDACTED_EMAIL], [REDACTED_PHONE], and [REDACTED_NAME] are safe and must
+not trigger review. Return exactly one token: PASS or REVIEW_REQUIRED."""
 
 
 class BedrockRuntimeGateway:
@@ -108,3 +115,32 @@ class BedrockRuntimeGateway:
         if not text_parts:
             raise AdapterContractError("Bedrock returned no recommendation text.")
         return "\n".join(text_parts)
+
+    def audit_privacy(self, *, text: str, categories: tuple[str, ...]) -> str:
+        """Validate already-redacted text without ever receiving the removed identifiers."""
+        user_prompt = (
+            "Deterministic redaction categories: "
+            f"{', '.join(categories) if categories else 'none'}\n\n"
+            "Sanitized incident text:\n"
+            f"{text}"
+        )
+        try:
+            response = self.client.converse(
+                modelId=self._generation_model_id,
+                system=[{"text": _PRIVACY_AUDIT_SYSTEM_PROMPT}],
+                messages=[{"role": "user", "content": [{"text": user_prompt}]}],
+                inferenceConfig={"maxTokens": 8, "temperature": 0.0},
+            )
+            blocks = response["output"]["message"]["content"]
+        except (BotoCoreError, ClientError, KeyError, TypeError) as error:
+            raise ExternalServiceError("Bedrock privacy audit") from error
+
+        if not isinstance(blocks, list):
+            raise AdapterContractError("Bedrock returned an invalid privacy audit response.")
+        text_parts = [
+            block["text"] for block in blocks if isinstance(block, dict) and "text" in block
+        ]
+        verdict = " ".join(text_parts).strip().upper()
+        if verdict not in {"PASS", "REVIEW_REQUIRED"}:
+            raise AdapterContractError("Bedrock returned an invalid privacy audit verdict.")
+        return verdict

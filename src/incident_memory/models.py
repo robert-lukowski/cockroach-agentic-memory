@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Self
 from uuid import UUID
 
 from incident_memory.errors import ValidationError
+from incident_memory.privacy import PrivacyGuardReport
 
 EMBEDDING_DIMENSIONS = 1024
 
@@ -424,12 +425,21 @@ class IncidentCreateResponse:
 class InvestigationResponse:
     recommendation: str
     evidence: tuple[IncidentEvidence, ...]
+    privacy_guard: PrivacyGuardReport = PrivacyGuardReport(
+        status="not_required",
+        redactions=0,
+        categories=(),
+        ai_reviewed=False,
+    )
+    timings: dict[str, float] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "recommendation": self.recommendation,
             "supporting_incident_ids": self.supporting_incident_ids(),
             "supporting_incidents": self.supporting_incidents(),
+            "privacy_guard": self.privacy_guard.as_dict(),
+            "timings": dict(self.timings),
             "evidence": [
                 {
                     "incident_id": str(item.incident.incident_id),
@@ -441,11 +451,13 @@ class InvestigationResponse:
         }
 
     def as_servicenow_dict(self) -> dict[str, Any]:
-        """Return the backward-compatible ServiceNow integration projection."""
+        """Return the backward-compatible ServiceNow integration projection plus safe metadata."""
         return {
             "recommendation": self.recommendation,
             "supporting_incident_ids": self.supporting_incident_ids(),
             "supporting_incidents": self.supporting_incidents(),
+            "privacy_guard": self.privacy_guard.as_dict(),
+            "timings": dict(self.timings),
         }
 
     def supporting_incident_ids(self) -> list[str]:
