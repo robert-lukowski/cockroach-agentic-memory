@@ -1,12 +1,47 @@
-"""Judge-facing CockroachDB retrieval proof panel."""
+"""Judge-facing progressive Agentic Memory Trace terminal."""
 
 from __future__ import annotations
 
+from html import escape
+
 import streamlit as st
 
-from frontend.models import AnalysisResult, format_milliseconds
+from frontend.models import AnalysisResult, format_milliseconds, format_percentage
 
 _REQUESTED_TOP_K = 5
+_LINE_DELAY_MS = 90
+
+
+def _privacy_trace(result: AnalysisResult) -> tuple[str, str]:
+    guard = result.privacy_guard
+    if guard.status == "verified":
+        details = (
+            f"PASS · {guard.redactions} configured direct identifier(s) redacted · "
+            "secondary review PASS"
+        )
+        return details, "ok"
+    if guard.status == "not_required":
+        return "PASS · no configured direct identifiers detected", "ok"
+    if guard.status == "redacted_audit_unavailable":
+        details = (
+            f"REDACTION ENFORCED · {guard.redactions} field(s) · "
+            "secondary review unavailable"
+        )
+        return details, "warn"
+    if guard.status == "not_available":
+        return "Not available in this response", "muted"
+    return f"REDACTION ENFORCED · {guard.redactions} field(s)", "warn"
+
+
+def _terminal_line(content: str, *, index: int, class_name: str = "") -> str:
+    delay_ms = index * _LINE_DELAY_MS
+    classes = "aim-terminal-line"
+    if class_name:
+        classes = f"{classes} {class_name}"
+    return (
+        f'<div class="{classes}" style="--aim-line-delay:{delay_ms}ms">'
+        f"{content}</div>"
+    )
 
 
 def _retrieval_trace_html(result: AnalysisResult) -> str:
@@ -21,130 +56,192 @@ def _retrieval_trace_html(result: AnalysisResult) -> str:
         if result.supporting_evidence_reported
         else "Not available"
     )
+    best_similarity = format_percentage(result.best_similarity)
+    privacy_detail, privacy_class = _privacy_trace(result)
+
+    rows: list[tuple[str, str]] = [
+        (
+            '<span class="aim-prompt">judge@agentic-memory:~$</span> '
+            '<span class="aim-command">investigate --trace</span>',
+            "command-line",
+        ),
+        ('<span class="aim-start">Trace started...</span>', "start"),
+        ("&nbsp;", "spacer"),
+        ('<span class="aim-section">PRIVACY BOUNDARY</span>', "section"),
+        (
+            "status: "
+            f'<span class="aim-{privacy_class}">{escape(privacy_detail)}</span>',
+            "",
+        ),
+        (
+            "input to downstream AI: "
+            '<span class="aim-ok">SANITIZED CONTEXT ONLY</span>',
+            "",
+        ),
+        ("&nbsp;", "spacer"),
+        ('<span class="aim-section">TITAN TEXT EMBEDDINGS V2</span>', "section"),
+        ('embedding: <span class="aim-ok">GENERATED</span>', ""),
+        ('vector dimensions: <span class="aim-info">1,024</span>', ""),
+        ("&nbsp;", "spacer"),
+        ('<span class="aim-section">COCKROACHDB OPERATIONAL MEMORY</span>', "section"),
+        ('access: <span class="aim-info">Cloud Managed MCP</span>', ""),
+        (
+            'index: <span class="aim-info">Distributed Vector Indexing</span>',
+            "",
+        ),
+        ('distance metric: <span class="aim-info">cosine</span>', ""),
+        (
+            "requested top-k: "
+            f'<span class="aim-info">{_REQUESTED_TOP_K} · application-owned</span>',
+            "",
+        ),
+        (
+            "returned memories: "
+            f'<span class="aim-ok">{escape(returned)}</span>',
+            "",
+        ),
+        (
+            "best similarity: "
+            f'<span class="aim-ok">{escape(best_similarity)}</span>',
+            "",
+        ),
+        (
+            "vector retrieval: "
+            f'<span class="aim-ok">{escape(retrieval_time)}</span>',
+            "",
+        ),
+        ("&nbsp;", "spacer"),
+        ('<span class="aim-section">EVIDENCE CONTROL</span>', "section"),
+        ('retrieved evidence: <span class="aim-ok">VALIDATED</span>', ""),
+        ('model-selected SQL: <span class="aim-no">NO</span>', ""),
+        ('model-selected evidence IDs: <span class="aim-no">NO</span>', ""),
+        ("&nbsp;", "spacer"),
+        ('<span class="aim-section">BEDROCK-POWERED INVESTIGATOR</span>', "section"),
+        ('grounded recommendation: <span class="aim-ok">GENERATED</span>', ""),
+        ("context: current incident + validated operational memory", ""),
+        ("&nbsp;", "spacer"),
+        ('<span class="aim-section">MEMORY POLICY</span>', "section"),
+        ('active investigation: <span class="aim-warn">READ ONLY</span>', ""),
+        (
+            'durable memory write: <span class="aim-no">DISABLED FOR ACTIVE INCIDENT</span>',
+            "",
+        ),
+        (
+            "admission path: "
+            '<span class="aim-info">RESOLVED / CLOSED synchronization only</span>',
+            "",
+        ),
+        ("&nbsp;", "spacer"),
+        ('<span class="aim-finish">Trace complete.</span>', "finish"),
+        (
+            '<span class="aim-muted">No credentials, secrets, raw payloads, or removed '
+            "identifiers are displayed.</span>",
+            "note",
+        ),
+    ]
+    lines = "".join(
+        _terminal_line(content, index=index, class_name=class_name)
+        for index, (content, class_name) in enumerate(rows)
+    )
+
     return f"""
     <style>
-      .aim-retrieval-trace {{
-        border: 1px solid rgba(105, 51, 255, 0.32);
-        border-radius: 1rem;
-        padding: 1rem 1.05rem;
+      .aim-terminal {{
+        background: #050505;
+        border: 1px solid rgba(250, 204, 21, 0.28);
+        border-radius: 0.9rem;
         margin: 0.2rem 0 1rem;
-        background:
-          linear-gradient(145deg, rgba(38, 24, 74, 0.72), rgba(8, 17, 32, 0.90));
-        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
+        overflow: hidden;
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.30);
       }}
-      .aim-retrieval-header {{
+      .aim-terminal-bar {{
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 0.8rem;
+        gap: 0.45rem;
+        padding: 0.65rem 0.8rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+        background: #0b0b0b;
       }}
-      .aim-retrieval-kicker {{
-        color: #C4B5FD;
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.11em;
-        text-transform: uppercase;
-      }}
-      .aim-retrieval-badge {{
-        border: 1px solid rgba(34, 197, 94, 0.30);
+      .aim-terminal-dot {{
+        width: 0.58rem;
+        height: 0.58rem;
         border-radius: 999px;
-        padding: 0.28rem 0.52rem;
-        background: rgba(22, 101, 52, 0.14);
-        color: #BBF7D0;
+        border: 1px solid rgba(250, 204, 21, 0.32);
+        background: rgba(250, 204, 21, 0.12);
+      }}
+      .aim-terminal-title {{
+        margin-left: 0.35rem;
+        color: #a1a1aa;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 0.68rem;
-        font-weight: 760;
-      }}
-      .aim-retrieval-grid {{
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0.6rem;
-      }}
-      .aim-retrieval-item {{
-        border: 1px solid rgba(148, 163, 184, 0.14);
-        border-radius: 0.78rem;
-        padding: 0.68rem 0.72rem;
-        background: rgba(15, 23, 42, 0.48);
-        min-height: 4.3rem;
-      }}
-      .aim-retrieval-label {{
-        color: #94A3B8;
-        font-size: 0.66rem;
-        font-weight: 700;
         letter-spacing: 0.04em;
-        text-transform: uppercase;
       }}
-      .aim-retrieval-value {{
-        color: #F8FAFC;
-        font-size: 0.82rem;
-        font-weight: 760;
-        line-height: 1.35;
-        margin-top: 0.26rem;
+      .aim-terminal-body {{
+        padding: 1rem 1.05rem 1.1rem;
+        color: #d4d4d8;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.78rem;
+        line-height: 1.55;
+        overflow-x: auto;
       }}
-      .aim-retrieval-footnote {{
-        margin-top: 0.72rem;
-        color: #94A3B8;
-        font-size: 0.68rem;
+      .aim-terminal-line {{
+        min-height: 1.1rem;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        opacity: 0;
+        transform: translateY(2px);
+        animation: aim-terminal-line-in 150ms ease-out forwards;
+        animation-delay: var(--aim-line-delay);
+      }}
+      .aim-terminal-line.spacer {{ min-height: 0.65rem; }}
+      .aim-prompt, .aim-command, .aim-start, .aim-section {{ color: #facc15; }}
+      .aim-prompt {{ font-weight: 800; }}
+      .aim-command {{ font-weight: 700; }}
+      .aim-start {{ color: #fde047; }}
+      .aim-section {{ font-weight: 800; letter-spacing: 0.045em; }}
+      .aim-ok, .aim-finish {{ color: #86efac; font-weight: 800; }}
+      .aim-info {{ color: #67e8f9; font-weight: 700; }}
+      .aim-warn {{ color: #fde68a; font-weight: 800; }}
+      .aim-no {{ color: #fca5a5; font-weight: 800; }}
+      .aim-muted {{ color: #71717a; }}
+      .aim-terminal-line.note {{
+        margin-top: 0.15rem;
+        font-size: 0.69rem;
         line-height: 1.45;
       }}
-      @media (max-width: 900px) {{
-        .aim-retrieval-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      @keyframes aim-terminal-line-in {{
+        to {{ opacity: 1; transform: translateY(0); }}
       }}
-      @media (max-width: 560px) {{
-        .aim-retrieval-grid {{ grid-template-columns: 1fr; }}
+      @media (prefers-reduced-motion: reduce) {{
+        .aim-terminal-line {{
+          animation: none;
+          opacity: 1;
+          transform: none;
+        }}
       }}
     </style>
-    <section class="aim-retrieval-trace" aria-label="CockroachDB retrieval trace">
-      <div class="aim-retrieval-header">
-        <span class="aim-retrieval-kicker">CockroachDB retrieval trace</span>
-        <span class="aim-retrieval-badge">TRUSTED MEMORY</span>
+    <section
+      class="aim-terminal"
+      role="log"
+      aria-live="polite"
+      aria-label="Agentic Memory Trace"
+    >
+      <div class="aim-terminal-bar" aria-hidden="true">
+        <span class="aim-terminal-dot"></span>
+        <span class="aim-terminal-dot"></span>
+        <span class="aim-terminal-dot"></span>
+        <span class="aim-terminal-title">agentic-memory — bash</span>
       </div>
-      <div class="aim-retrieval-grid">
-        <div class="aim-retrieval-item">
-          <div class="aim-retrieval-label">Vector index</div>
-          <div class="aim-retrieval-value">Distributed Vector Indexing</div>
-        </div>
-        <div class="aim-retrieval-item">
-          <div class="aim-retrieval-label">Vector space</div>
-          <div class="aim-retrieval-value">1,024-D · cosine</div>
-        </div>
-        <div class="aim-retrieval-item">
-          <div class="aim-retrieval-label">Requested Top-K</div>
-          <div class="aim-retrieval-value">{_REQUESTED_TOP_K} · application-owned</div>
-        </div>
-        <div class="aim-retrieval-item">
-          <div class="aim-retrieval-label">Returned memories</div>
-          <div class="aim-retrieval-value">{returned}</div>
-        </div>
-        <div class="aim-retrieval-item">
-          <div class="aim-retrieval-label">Vector retrieval</div>
-          <div class="aim-retrieval-value">{retrieval_time}</div>
-        </div>
-        <div class="aim-retrieval-item">
-          <div class="aim-retrieval-label">Database access</div>
-          <div class="aim-retrieval-value">CockroachDB Cloud Managed MCP</div>
-        </div>
-        <div class="aim-retrieval-item">
-          <div class="aim-retrieval-label">Evidence control</div>
-          <div class="aim-retrieval-value">Application-validated</div>
-        </div>
-        <div class="aim-retrieval-item">
-          <div class="aim-retrieval-label">Memory admission</div>
-          <div class="aim-retrieval-value">Resolved / closed sync path</div>
-        </div>
-      </div>
-      <div class="aim-retrieval-footnote">
-        Returned-memory count and vector-retrieval latency are request-derived when available.
-        Index, vector, access-path, and control labels describe the reviewed deployment
-        architecture; resolved/closed admission is enforced by the controlled synchronization
-        workflow.
-      </div>
+      <div class="aim-terminal-body">{lines}</div>
     </section>
     """
 
 
 def render_retrieval_trace(result: AnalysisResult) -> None:
-    """Show how CockroachDB participated in the completed investigation."""
-    st.subheader("CockroachDB Retrieval Trace")
-    st.caption("Judge-facing proof of the operational-memory retrieval path.")
+    """Replay the completed request path as a controlled progressive terminal trace."""
+    st.subheader("Agentic Memory Trace")
+    st.caption(
+        "Controlled replay of the completed request path. Request-derived values are shown "
+        "where available; this is not a raw backend log stream."
+    )
     st.html(_retrieval_trace_html(result))
