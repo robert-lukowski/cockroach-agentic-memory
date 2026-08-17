@@ -10,14 +10,32 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 from frontend.api_client import AgenticMemoryApiClient, ApiCallResult
+from frontend.judge_gate import hash_pin
 from frontend.models import DEMO_SCENARIOS
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ENTRYPOINT = REPOSITORY_ROOT / "frontend" / "app.py"
+_TEST_PIN = "012345"
 
 
 def _widget_value(elements, label: str):
     return next(item.value for item in elements if item.label == label)
+
+
+def _widget(elements, label: str):
+    return next(item for item in elements if item.label == label)
+
+
+def _configured_app() -> AppTest:
+    app = AppTest.from_file(ENTRYPOINT, default_timeout=20)
+    app.secrets["JUDGE_PIN_SHA256"] = hash_pin(_TEST_PIN)
+    return app.run()
+
+
+def _unlock(app: AppTest, *, pin: str = _TEST_PIN) -> AppTest:
+    _widget(app.text_input, "Judge PIN").input(pin).run()
+    _widget(app.button, "Unlock live investigation").click().run()
+    return app
 
 
 def test_entrypoint_runs_outside_repository_root(tmp_path: Path) -> None:
@@ -80,6 +98,80 @@ def test_selecting_sample_still_populates_its_values() -> None:
     assert not app.exception
 
 
+def test_missing_pin_secret_fails_closed_and_keeps_live_button_disabled(monkeypatch) -> None:
+    calls: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        AgenticMemoryApiClient,
+        "analyze",
+        lambda _client, payload: calls.append(payload),
+    )
+
+    app = AppTest.from_file(ENTRYPOINT, default_timeout=20).run()
+
+    run_button = _widget(app.button, "⚡ Run Agentic Investigation")
+    assert run_button.disabled is True
+    assert calls == []
+    assert any("locked until judge access is configured" in item.value for item in app.warning)
+    assert not app.exception
+
+
+def test_wrong_pin_keeps_investigation_locked_and_never_calls_api(monkeypatch) -> None:
+    calls: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        AgenticMemoryApiClient,
+        "analyze",
+        lambda _client, payload: calls.append(payload),
+    )
+    app = _configured_app()
+
+    _unlock(app, pin="12345")
+
+    assert _widget(app.button, "⚡ Run Agentic Investigation").disabled is True
+    assert calls == []
+    assert any(item.value == "The judge PIN is not valid." for item in app.error)
+    assert not app.exception
+
+
+def test_correct_pin_unlocks_only_the_streamlit_session_and_allows_api_call(
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, str]] = []
+    monkeypatch.setenv(
+        "AGENTIC_MEMORY_API_ENDPOINT",
+        "https://example.test/v1/servicenow/analyze",
+    )
+    monkeypatch.setenv("AGENTIC_MEMORY_API_KEY", "synthetic-test-key")
+
+    def analyze(_client, payload):
+        calls.append(payload)
+        return ApiCallResult(
+            payload={
+                "recommendation": "Inspect the validated synthetic evidence.",
+                "supporting_incident_ids": [],
+                "supporting_incidents": [],
+            },
+            round_trip_ms=25.0,
+            transient_retry_occurred=False,
+        )
+
+    monkeypatch.setattr(AgenticMemoryApiClient, "analyze", analyze)
+    app = _configured_app()
+
+    _unlock(app)
+
+    assert _widget(app.button, "⚡ Run Agentic Investigation").disabled is False
+    assert app.session_state["judge_live_investigation_unlocked"] is True
+    assert not any(item.label == "Judge PIN" for item in app.text_input)
+
+    _widget(app.button, "⚡ Run Agentic Investigation").click().run()
+
+    assert len(calls) == 1
+    assert "Judge PIN" not in str(calls[0])
+    assert "JUDGE_PIN_SHA256" not in str(calls[0])
+    assert "Recommendation" in [item.value for item in app.subheader]
+    assert not app.exception
+
+
 def test_success_layout_places_explanation_between_recommendation_and_graph() -> None:
     source = ENTRYPOINT.read_text(encoding="utf-8")
 
@@ -111,10 +203,11 @@ def test_successful_investigation_renders_explanation_and_existing_panels(
             transient_retry_occurred=False,
         ),
     )
-    app = AppTest.from_file(ENTRYPOINT, default_timeout=20).run()
+    app = _configured_app()
 
     assert "What just happened?" not in [item.value for item in app.subheader]
-    app.button[0].click().run()
+    _unlock(app)
+    _widget(app.button, "⚡ Run Agentic Investigation").click().run()
 
     headings = [item.value for item in app.subheader]
     assert headings.index("Recommendation") < headings.index("What just happened?")
