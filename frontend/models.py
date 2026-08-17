@@ -246,7 +246,11 @@ def _normalize_privacy_guard(value: object) -> PrivacyGuardResult:
     redactions_value = value.get("redactions")
     redactions = (
         redactions_value
-        if isinstance(redactions_value, int) and not isinstance(redactions_value, bool) and redactions_value >= 0
+        if (
+            isinstance(redactions_value, int)
+            and not isinstance(redactions_value, bool)
+            and redactions_value >= 0
+        )
         else 0
     )
     categories_value = value.get("categories")
